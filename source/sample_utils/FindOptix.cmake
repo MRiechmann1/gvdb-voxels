@@ -111,7 +111,7 @@ if ( NOT OPTIX_ROOT_DIR )
     set(OPTIX_ROOT_DIR "")
     set (OPTIX_VERSION "0.0.0" )
   else ()
-     set (OPTIX_ROOT_DIR "/usr/local/optix" CACHE PATH "" FORCE)
+     set (OPTIX_ROOT_DIR "/home/ubuntu/NVIDIA-OptiX-SDK-6.5.0-linux64/" CACHE PATH "" FORCE)
      set (OPTIX_VERSION "4.0.0" )
   endif()
   

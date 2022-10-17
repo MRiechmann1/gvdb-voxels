@@ -123,5 +123,16 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 	scan.pntClrs[ y*res.x + x] = clr;	
 }
 
+__device__ float3 cameraPos;
+__device__ float3 cameraOri;
+__device__ float* distances;
+
+extern "C" __global__ void updateMap (int3 res, uchar chan) 
+{
+	GVDB_VOXPACKED
+	float3 wpos;
+	if ( !getAtlasToWorld ( vox, wpos )) return;
+}
+
 
 
