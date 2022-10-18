@@ -123,16 +123,47 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 	scan.pntClrs[ y*res.x + x] = clr;	
 }
 
-__device__ float3 cameraPos;
-__device__ float3 cameraOri;
+__device__ float3 cameraPos; 	// camera origin
+__device__ float3 cameraX; 		// pointing 1m right of the camera
+__device__ float3 cameraY; 		// pointing 1m above the camera
+__device__ float3 cameraZ; 		// pointing 1m in front of the camera
 __device__ float* distances;
 
 extern "C" __global__ void updateMap (int3 res, uchar chan) 
 {
+	float3 wpos, wnorm, xRef, yRef;
+	int xmin, xmax, ymin, ymax;
+	float dotX, dotY, dotGlobal;
+	float len;
 	GVDB_VOXPACKED
-	float3 wpos;
 	if ( !getAtlasToWorld ( vox, wpos )) return;
+	
+	/*
+	 * Check if voxel is in range bounds
+	 */
+	wpos = wpos - cameraPos; // get relative position
+	len = lenght(wpos);
+	if (len > 4.0 || len < 0.15) return; // len not in estmiated max and min distance
+
+	/*
+	 * Check if voxel is in fov
+	 */	
+	wnorm = wpos / len;
+	dotGlobal = dot(wnorm, cameraZ);
+	if (dotGlobal < 0.3420214) return; 	// 0.3420214 is equivalent to 70 degree
+										// a value smaller means the angle is greater than 70 degree and therefor out of fov
+
+	/*
+	 * Find corresponding rays
+	 */
+	xRef = dot(cameraY, wnorm);
+	yRef = dot(cameraX, wnorm);
+
+	
 }
+
+// Follow the implementation of scanBuilding (especially raxbox intersect), to implemnt ray casting based insertion
+// Voxel based implementation see board
 
 
 
