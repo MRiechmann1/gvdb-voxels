@@ -327,6 +327,7 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_NOISE,				"gvdbOpNoise",					MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 	LoadFunction ( FUNC_CLR_EXPAND,			"gvdbOpClrExpand",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 	LoadFunction ( FUNC_EXPANDC,			"gvdbOpExpandC",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
+	LoadFunction ( FUNC_MAPPING_UPDATE,		"gvdbUpdateMap",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 
 	SetModule ( cuModule[MODL_PRIMARY] );	
 

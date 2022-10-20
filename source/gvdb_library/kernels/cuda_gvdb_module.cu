@@ -34,6 +34,9 @@
 
 // Particle functions 
 #include "cuda_gvdb_particles.cuh"
+
+// Mapping functions 
+#include "cuda_gvdb_mapping.cuh"
      
 inline __device__ float4 performPhongShading( VDBInfo* gvdb, uchar chan, float3 shit, float3 snorm, float4 sclr, gvdbBrickFunc_t brickfunc )
 {

@@ -206,6 +206,7 @@
 	#define FUNC_GROW				115
 	#define FUNC_CLR_EXPAND			116
 	#define FUNC_EXPANDC			117
+	#define FUNC_MAPPING_UPDATE		118
 
 	#define MAX_FUNC				255
 

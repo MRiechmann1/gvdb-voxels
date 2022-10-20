@@ -17,10 +17,8 @@
 
 	#define ALIGN(x)	__align__(x)
 	
-	extern "C" {
-
-		__global__ void updateMap (int3 res, uchar chan);
-		__global__ void scanBuildings ( float3 pos, int3 res, int num_obj, float tmax );
-	}
+	
+	extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, float tmax );
+	
 
 #endif

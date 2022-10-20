@@ -104,6 +104,10 @@ public:
 	ScanInfo	m_ScanInfo;	
 	DataPtr		m_seeds;
 
+	/*Map Update Parameter*/
+	CUfunction	m_FuncMapUpdate;
+	//CUdeviceptr	m_cuScanInfo;
+
 	int			m_w, m_h;
 	int			m_radius;
 	Vector3DF	m_origin;
@@ -449,7 +453,7 @@ bool Sample::init()
 	m_shade_style = 5;
 	m_generate = true;
 	m_show_pov = true;
-	m_use_color = false;
+	m_use_color = true;
 
 	m_speed = 0;
 	m_scanres = Vector3DI(240, 180, 0 );	
@@ -751,7 +755,14 @@ void Sample::display()
 		ScanBuildings ();
 
 		render_update ();
-
+		//gvdb.ComputeKernel(m_Module, m_FuncMapUpdate, 1, true, true)
+		
+		PERF_PUSH("Update");
+		Vector3DF test;
+		test.Set(0,0,0);
+		gvdb.Compute(FUNC_MAPPING_UPDATE, 1, 1, test, true, false);
+		PERF_POP();
+		
 		m_frame++;		
 		m_sample = 1;
 
