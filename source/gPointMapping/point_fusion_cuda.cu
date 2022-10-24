@@ -21,7 +21,7 @@ struct ALIGN(16) ScanInfo {
 	int*		objGrid;
 	int*		objCnts;
 	Obj*		objList;
-	float3*		pntList;
+	float*		pntList;
 	uint*		pntClrs;
 	int3		gridRes;
 	float3		gridSize;	
@@ -90,8 +90,8 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if ( x >= res.x || y >= res.y ) return;
 
-	float3 jit = jitter_sample();
-	float3 dir = getViewRay( float(x+jit.x)/float(res.x), float(y+jit.y)/float(res.y) );
+	//float3 jit = jitter_sample();
+	float3 dir = getViewRay( float(x)/float(res.x), float(y)/float(res.y) );
 	
 	int gcell = int(pos.z/scan.gridSize.y) * scan.gridRes.x + int(pos.x/scan.gridSize.x);
 	if ( gcell < 0 || gcell > scan.gridRes.x*scan.gridRes.y)  return;
@@ -115,11 +115,11 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 			}
 		}
 	}
-	if ( tnearest.x == NOHIT) { scan.pntList[ y*res.x + x] = make_float3(0,0,0); return; }
+	if ( tnearest.x == NOHIT) { scan.pntList[ y*res.x + x] = 0.0; return; }
 
 	atomicAdd(&pntout, 1);
 	
-	scan.pntList[ y*res.x + x] = pos + tnearest.x * dir;
+	scan.pntList[ y*res.x + x] = tnearest.x;
 	scan.pntClrs[ y*res.x + x] = clr;	
 }
 

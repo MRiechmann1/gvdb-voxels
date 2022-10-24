@@ -315,6 +315,16 @@
 		Vector3DF	cover;
 		int			icnt;
 	};
+	struct ALIGN(16) FrameInfo {
+		CUdeviceptr pntList;
+		CUdeviceptr pntClrs;
+		Vector3DI	gridRes;
+		Vector3DF	gridSize;		
+		Vector3DF	cams;
+		Vector3DF	camu;
+		Vector3DF	camv;
+		Vector3DF	pos;
+	};
 
 	
 	class GVDB_API VolumeGVDB : public VolumeBase {
@@ -334,6 +344,9 @@
 			void SetModule ( CUmodule module );			
 			void SetEpsilon(float eps, int maxiter) { mEpsilon = eps; mMaxIter = maxiter; mVDBInfo.update = true; }			
 			Vector3DI getVersion();
+
+			// Mapping
+			void setFrameInformation(FrameInfo &frame);
 						
 			CUcontext getContext() { return mContext; }
 			CUdevice getDevice() { return mDevice; }
@@ -397,6 +410,7 @@
 			uchar GetChannelType(uchar channel); // Returns the type code (e.g. T_FLOAT) of the given channel.
 			slong Reparent ( int lev, slong prevroot_id, Vector3DI pos, bool& bNew );		// Reparent tree with new root			
 			slong ActivateSpace ( Vector3DF pos );
+			slong ActivateSpace ( Vector3DF pos1, Vector3DF pos2 );
 			slong ActivateSpace ( slong nodeid, Vector3DI pos, bool& bNew, slong stopnode = ID_UNDEFL, int stoplev = 0 );	// Active leaf at given location
 			slong ActivateSpaceAtLevel ( int lev, Vector3DI pos );
 			Vector3DI GetCoveringNode ( int lev, Vector3DI pos, Vector3DI& range );
@@ -862,6 +876,9 @@
 
 			// Dummy frame buffer
 			int mDummyFrameBuffer;
+
+			// Mapping
+			CUdeviceptr	cuFrameInfo;
 
 			// CUDA Device & Context
 			int				mDevSelect;

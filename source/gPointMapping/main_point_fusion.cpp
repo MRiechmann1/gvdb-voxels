@@ -5,6 +5,10 @@
 //-----------------------------------------------------------------------------
 
 //#define USE_DENSE
+/*
+Note: one voxel has the default size 1 (no transform applied)
+For the view, one voxel size is considered as one cm
+*/
 
 // GVDB library
 #include "gvdb.h"			
@@ -23,6 +27,7 @@ using namespace nvdb;
 #define GRID_CNT	(GRID_X*GRID_Y)
 #define GRID_BMAX	(GRID_CNT*100)
 #define GRID_SCALE	5.0f
+#define VOXEL_SIZE 0.1f
 
 VolumeGVDB	gvdb;
 
@@ -106,6 +111,7 @@ public:
 
 	/*Map Update Parameter*/
 	CUfunction	m_FuncMapUpdate;
+	FrameInfo	m_FrameInfo;	
 	//CUdeviceptr	m_cuScanInfo;
 
 	int			m_w, m_h;
@@ -125,6 +131,7 @@ public:
 	bool		m_use_color;
 	std::string m_mem, m_vox, m_ext, m_pt;
 	long		m_totalpnts;
+	float 		m_fovBorderLength;
 
 	Camera3D	m_carcam;
 };
@@ -409,7 +416,7 @@ void Sample::ScanBuildings ()
 	m_totalpnts += pntout;
 
 	if ( m_show_points ) {
-		m_pnts.usedNum = m_numpnts; m_pnts.size = sizeof(Vector3DF)*m_numpnts;
+		m_pnts.usedNum = m_numpnts; m_pnts.size = sizeof(float)*m_numpnts;
 		m_clrs.usedNum = m_numpnts; m_clrs.size = sizeof(uint)*m_numpnts;
 		gvdb.RetrieveData ( m_pnts );
 		gvdb.RetrieveData ( m_clrs );
@@ -427,16 +434,18 @@ void Sample::SetupGVDB()
 {
 	// Configure
 	gvdb.Configure(3, 3, 3, 3, 5);
+	gvdb.DestroyChannels ();	
+	
 	gvdb.SetChannelDefault(16, 16, 8);
-	gvdb.AddChannel(0, T_FLOAT, 1, F_LINEAR);
+	gvdb.AddChannel(0, T_FLOAT, 1, F_LINEAR);			// change to uchar for better memory usage
 	gvdb.FillChannel(0, Vector4DF(3, 0, 0, 0));
 	if (m_use_color) {
 		gvdb.AddChannel(1, T_UCHAR4, 1, F_POINT);
 		gvdb.SetColorChannel(1);
-		gvdb.FillChannel(1, Vector4DF(0, 0, 0, 0));
+		gvdb.FillChannel(1, Vector4DF(0, 0, 0, 100));
 	}
-	DataPtr a, b;
-	gvdb.SetPoints(m_pnts, a, (m_use_color ? m_clrs : b));
+	//DataPtr a, b;
+	//gvdb.SetPoints(m_pnts, a, (m_use_color ? m_clrs : b));
 }
 
 bool Sample::init() 
@@ -480,7 +489,7 @@ bool Sample::init()
 	gvdb.AddPath ( ASSET_PATH );
 
 	// Load custom CUDA function
-	cudaCheck ( cuModuleLoad ( &m_Module, "point_fusion_cuda.ptx" ), "PointFusion", "LoadKernel", "cuModuleLoad", "point_fusion_cuda.ptx", true );
+	cudaCheck ( cuModuleLoad ( &m_Module, "point_fusion_cuda.ptx" ), "PointFusion", "LoadKernel", "cuModulpntListeLoad", "point_fusion_cuda.ptx", true );
 	LoadKernel ( 0, "scanBuildings" );
 	size_t len = 0;
 	cudaCheck ( cuModuleGetGlobal ( &m_cuScanInfo, &len, m_Module, "scan" ), "PointFusion", "LoadKernel", "cuModuleGetGlobal", "cuScanInfo", true );
@@ -521,7 +530,7 @@ bool Sample::init()
 	// Allocate points
 	m_maxpnts = 1000000;
 	m_numpnts = 0;
-	gvdb.AllocData ( m_pnts, m_maxpnts, sizeof(Vector3DF), true );
+	gvdb.AllocData ( m_pnts, m_maxpnts, sizeof(float), true );
 	gvdb.AllocData ( m_clrs, m_maxpnts, sizeof(uint), true );	
 
 	// Setup GVDB topology & channels
@@ -540,12 +549,13 @@ bool Sample::init()
 
 	// Setup car camera
 	m_carcam.setNearFar(1, 100000);
-	m_carcam.setFov ( 90 );
+	m_carcam.setFov ( 122 );
 	m_carcam.setDist ( 1400 );		
 	m_carcam.setPos ( 2*m_gridsz*GRID_SCALE, 4*GRID_SCALE, 2*m_gridsz*GRID_SCALE );	
 	m_carcam.setAngles ( 180, 0, 0);
 	
 	lgt->setOrbit(Vector3DF(42, 40, 0), m_carcam.getPos(), 2000*GRID_SCALE, 1.0);
+	m_fovBorderLength = (4.0f/VOXEL_SIZE)  / m_carcam.tlRayWorld.z;
 
 	// Initialize GUIs
 	start_guis ( m_w, m_h );
@@ -652,12 +662,12 @@ void Sample::draw_camera ()
 	Camera3D* cam = gvdb.getScene()->getCamera();	
 	start3D ( cam );		// start 3D drawing
 
-	Vector3DF p[8];
+	Vector3DF p[5];
 	p[0] = m_carcam.from_pos;
-	p[1] = p[0] + Vector3DF(m_carcam.tlRayWorld)*0.005f;
-	p[2] = p[0] + Vector3DF(m_carcam.trRayWorld)*0.005f;
-	p[3] = p[0] + Vector3DF(m_carcam.blRayWorld)*0.005f;
-	p[4] = p[0] + Vector3DF(m_carcam.brRayWorld)*0.005f;
+	p[1] = p[0] + Vector3DF(m_carcam.tlRayWorld) * m_fovBorderLength;
+	p[2] = p[0] + Vector3DF(m_carcam.trRayWorld) * m_fovBorderLength;
+	p[3] = p[0] + Vector3DF(m_carcam.blRayWorld) * m_fovBorderLength;
+	p[4] = p[0] + Vector3DF(m_carcam.brRayWorld) * m_fovBorderLength;
 
 	drawLine3D ( p[0].x, 0, p[0].z, p[0].x, p[0].y, p[0].z, .5, .5, .5, 1 );
 	drawLine3D ( p[0].x,p[0].y,p[0].z, p[1].x, p[1].y, p[1].z, 1, 1, 0, 1 );
@@ -692,19 +702,7 @@ void Sample::draw_objects ()
 
 void Sample::draw_points ()
 {
-	Camera3D* cam = gvdb.getScene()->getCamera();	
-	Vector3DF*	fpos = (Vector3DF*) m_pnts.cpu;	
-	uint*		fclr = (uint*) m_clrs.cpu;
-	Vector3DF p1, p2;
-	uint c;
-	
-	start3D ( gvdb.getScene()->getCamera() );		// start 3D drawing
-	for (int n=0; n < m_numpnts; n++ ) {
-		p1 = *fpos++; p2 = p1 + Vector3DF(.05f,.05f,.05f);
-		c =  *fclr++;				
-		drawBox3D ( p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, RED(c), GRN(c), BLUE(c), 1 );
-	}
-	end3D ();
+
 }
 
 
@@ -754,14 +752,70 @@ void Sample::display()
 		// Scan buildings
 		ScanBuildings ();
 
-		render_update ();
+		//render_update ();
 		//gvdb.ComputeKernel(m_Module, m_FuncMapUpdate, 1, true, true)
 		
-		PERF_PUSH("Update");
-		Vector3DF test;
-		test.Set(0,0,0);
-		gvdb.Compute(FUNC_MAPPING_UPDATE, 1, 1, test, true, false);
+		// Activate Voxels and rebuild topology
+		PERF_PUSH("Dynamic Topology");	
+		// calculate fov bounding box:
+		// 1: all 5 points
+		Vector3DF p[5];
+		p[0] = m_carcam.from_pos;
+		p[1] = p[0] + Vector3DF(m_carcam.tlRayWorld) * m_fovBorderLength;
+		p[2] = p[0] + Vector3DF(m_carcam.trRayWorld) * m_fovBorderLength;
+		p[3] = p[0] + Vector3DF(m_carcam.blRayWorld) * m_fovBorderLength;
+		p[4] = p[0] + Vector3DF(m_carcam.brRayWorld) * m_fovBorderLength;
+		// 2: min and max values
+		Vector3DF min, max;
+		min.x = std::max(0.0f, std::min(p[0].x, std::min(p[1].x, std::min(p[2].x, std::min(p[3].x, p[4].x)))));
+		min.y = std::max(0.0f, std::min(p[0].y, std::min(p[1].y, std::min(p[2].y, std::min(p[3].y, p[4].y)))));
+		min.z = std::max(0.0f, std::min(p[0].z, std::min(p[1].z, std::min(p[2].z, std::min(p[3].z, p[4].z)))));
+		max.x = std::max(p[0].x, std::max(p[1].x, std::max(p[2].x, std::max(p[3].x, p[4].x))));
+		max.y = std::max(p[0].y, std::max(p[1].y, std::max(p[2].y, std::max(p[3].y, p[4].y))));
+		max.z = std::max(p[0].z, std::max(p[1].z, std::max(p[2].z, std::max(p[3].z, p[4].z))));
+
+		gvdb.ActivateSpace ( min, max );
+
+		gvdb.FinishTopology();	// false. no commit pool	false. no compute bounds
+		gvdb.UpdateAtlas();
 		PERF_POP();
+
+		// insert points
+		PERF_PUSH("Update");
+		m_FrameInfo.cams = m_carcam.tlRayWorld;
+		m_FrameInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
+		m_FrameInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
+		m_FrameInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
+		m_FrameInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
+		m_FrameInfo.pntList = m_pnts.gpu;
+		m_FrameInfo.pntClrs = m_clrs.gpu;
+		m_FrameInfo.pos.x = m_carcam.getPos().x;
+		m_FrameInfo.pos.y = m_carcam.getPos().y;
+		m_FrameInfo.pos.z = m_carcam.getPos().z;
+		
+		//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
+		gvdb.setFrameInformation(m_FrameInfo);
+		Vector3DF test;
+		test.Set(0,0,0);	
+		gvdb.Compute(FUNC_MAPPING_UPDATE, 0, 1, test, false, false);
+		gvdb.UpdateApron(0, 0.0f);
+		PERF_POP();
+
+
+		if (m_render_optix) {
+			PERF_PUSH("Update OptiX");
+			optx.UpdateVolume(&gvdb);			// GVDB topology has changed
+			PERF_POP();
+		}
+		
+		// must be called AFTER update apron
+		char buf[1024];
+		Vector3DF ext, vox, used, free;
+		gvdb.getUsage(ext, vox, used, free);
+		sprintf(buf, "%6.0f / %6.0f MB (%4.3f%%)", free.y-free.x, free.y, (free.y-free.x)*100.0 / free.y); m_mem = buf;	
+		sprintf(buf, "%d x %d x %d", (int)ext.x, (int)ext.y, (int)ext.z); m_ext = buf;
+		sprintf(buf, "%d brk, %dM vox, %4.3f%%", (int)vox.x, (int)vox.y, vox.z); m_vox = buf;
+		sprintf(buf, "%6.2fM pnts", float(m_totalpnts) / 1000000.0f ); m_pt = buf;
 		
 		m_frame++;		
 		m_sample = 1;
@@ -839,7 +893,7 @@ void Sample::motion(int x, int y, int dx, int dy)
 	if (m_sample == 0) {
 		nvprintf("cam ang: %f %f %f\n", cam->getAng().x, cam->getAng().y, cam->getAng().z);
 		nvprintf("cam dst: %f\n", cam->getOrbitDist() );
-		nvprintf("cam to:  %f %f %f\n", cam->getToPos().x, cam->getToPos().y, cam->getToPos().z );
+		nvprintf("cam to:  %f %f %f\n", cam->getPos().x, cam->getPos().y, cam->getPos().z );
 		nvprintf("lgt ang: %f %f %f\n\n", lgt->getAng().x, lgt->getAng().y, lgt->getAng().z);		
 	}
 }

@@ -329,9 +329,17 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_EXPANDC,			"gvdbOpExpandC",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 	LoadFunction ( FUNC_MAPPING_UPDATE,		"gvdbUpdateMap",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 
+	cudaCheck ( cuModuleGetGlobal ( &cuFrameInfo, &len, cuModule[MODL_PRIMARY], "frame" ), "VolumeGVDB", "LoadKernel", "cuModuleGetGlobal", "cuFrameInfo", true );
+	
+
 	SetModule ( cuModule[MODL_PRIMARY] );	
 
 	POP_CTX
+}
+
+void VolumeGVDB::setFrameInformation(FrameInfo &frame) {
+	cudaCheck ( cuMemcpyHtoD ( cuScnInfo, &frame, sizeof(FrameInfo)), "VolumeGVDB", "gvdbUpdateMap", "cuMemcpyHtoD", "m_ScanInfo", true );
+
 }
 
 // Reset to default module
@@ -2772,6 +2780,28 @@ slong VolumeGVDB::ActivateSpace ( Vector3DF pos )
 	if ( node_id == ID_UNDEFL ) return ID_UNDEFL;
 	if ( !bnew ) return node_id; // exiting node. return
 	return ID_UNDEFL;
+}
+
+// Activate region of space in a 3D region
+slong VolumeGVDB::ActivateSpace ( Vector3DF min, Vector3DF max )
+{	
+
+	int N = mPool->getNumLevels ();
+	Extents e = ComputeExtents ( N, min, max );			// start - level N
+	ActivateRegion ( N-1, e );									// activate - level N-1
+	for (float x = min.x; x <= max.x; x+= mVDBInfo.brick_res) {
+		for (float y = min.y; y <= max.y; y+= mVDBInfo.brick_res) {
+			for (float z = min.z; z <= max.z; z+= mVDBInfo.brick_res) {
+				ActivateSpace(Vector3DF(x, y, z));
+			}
+		}
+	}
+	/*Vector3DI brickpos;
+	bool bnew = false;
+	slong node_id = ActivateSpace ( mRoot, pos, bnew, ID_UNDEFL, 0 );
+	if ( node_id == ID_UNDEFL ) return ID_UNDEFL;
+	if ( !bnew ) return node_id; // exiting node. return
+	return ID_UNDEFL;*/
 }
 
 // Activate region of space at 3D position down to a given level
