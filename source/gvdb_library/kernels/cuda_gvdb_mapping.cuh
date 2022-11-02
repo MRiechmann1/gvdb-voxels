@@ -1,4 +1,3 @@
-
 struct ALIGN(16) FrameInfo {
 	float3*		pntList;
 	uint*		pntClrs;
@@ -8,36 +7,39 @@ struct ALIGN(16) FrameInfo {
 	float3		camu;
 	float3		camv;
 	float3 		pos;
+	float  		maxDist; // in voxels number
+	float  		minDist; // in voxels number
 };
 __device__ FrameInfo		frame;
 
 extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar chan,float p1, float p2, float p3  )
 {
-	float3 wpos, wnorm, xRef, yRef;
+	float3 relPos, wpos, wnorm, xRef, yRef;
 	int xmin, xmax, ymin, ymax;
 	float dotX, dotY, dotGlobal;
 	float len;
 	GVDB_VOXUNPACKED
-    uchar4 v;// = 255 << 24 || 255 << 16 || 255 << 8 || 255;
-	v.x = 255;
-	v.y = 125;
-	v.z = 125;
-	v.w = 50;
-	surf3Dwrite( v, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
 
-	float val = 2.0f; // setVolumeRange setzt -1 als max (nur danm gerendert)
-						// anpassen der von setVolumeRange und renderPipeline
-	surf3Dwrite( val, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
-	return;
-	
 	if ( !getAtlasToWorld ( gvdb, atlasIdx, wpos )) return;
-	
+
+
 	/*
 	 * Check if voxel is in range bounds
 	 */
-	wpos = wpos - frame.pos; // get relative position
-	len = length(wpos);
-	if (len > 4.0 || len < 0.15) return; // len not in estmiated max and min distance
+	relPos = wpos - frame.pos; //  pos wrong? get relative position
+	len = length(relPos);
+	if (len >  frame.maxDist || len < frame.minDist) return; //len in voxel size // len not in estmiated max and min distance
+ 
+
+
+	uchar4 clr = make_uchar4(255, 125, 125, 255);
+	surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+
+	float prob = 6; // setVolumeRange setzt -1 als max (nur danm gerendert) anpassen der von setVolumeRange und renderPipeline
+	surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	return;
+
+	// write color
 
 	/*
 	 * Check if voxel is in fov
@@ -57,3 +59,12 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 
 // Follow the implementation of scanBuilding (especially raxbox intersect), to implemnt ray casting based insertion
 // Voxel based implementation see board
+
+/*	
+FOR DEBUGGING
+	# if __CUDA_ARCH__>=200
+    printf("%f, %f, %f \n", wpos.x, wpos.y, wpos.z);
+    printf("%f, %f, %f \n\n", frame.pos.x, frame.pos.y, frame.pos.z);
+
+	#endif 
+	*/

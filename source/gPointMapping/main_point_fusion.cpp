@@ -437,6 +437,9 @@ void Sample::SetupGVDB()
 	gvdb.DestroyChannels ();	
 	
 	gvdb.SetChannelDefault(16, 16, 8);
+	//TODO: For less memory usage set to T_UCHAR
+	// To do so, the renderes in source/gvdb_library/kernels/cuda_gvdb_raycast.cuh need to be adjusted to read uchar instead of float
+	// and chnage type of custom kernels
 	gvdb.AddChannel(0, T_FLOAT, 1, F_LINEAR);			// change to uchar for better memory usage
 	gvdb.FillChannel(0, Vector4DF(3, 0, 0, 0));
 	if (m_use_color) {
@@ -459,7 +462,7 @@ bool Sample::init()
 	m_show_objs = false;
 	m_radius = 1;		
 	m_origin = Vector3DF(0,0,0);
-	m_shade_style = 5;
+	m_shade_style = 2;
 	m_generate = true;
 	m_show_pov = true;
 	m_use_color = true;
@@ -511,7 +514,7 @@ bool Sample::init()
 	// Default volume params
 	gvdb.getScene()->SetSteps(0.5f, 16, 0.5f);			// Set raycasting steps
 	gvdb.getScene()->SetExtinct(-1.0f, 1.1f, 0.0f);			// Set volume extinction	
-	gvdb.getScene()->SetVolumeRange(0.0f, 3.0f, -1.0f);		// Set volume value range
+	gvdb.getScene()->SetVolumeRange(5.0f, 10.0f, 1.0f);		// Set volume value range
 	gvdb.getScene()->SetCutoff(0.005f, 0.001f, 0.0f);
 	gvdb.getScene()->SetShadowParams ( 0.8f, 1, 0 );	
 	gvdb.getScene()->SetBackgroundClr(0.1f, 0.2f, 0.3f, 1.0f);
@@ -789,16 +792,17 @@ void Sample::display()
 		m_FrameInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
 		m_FrameInfo.pntList = m_pnts.gpu;
 		m_FrameInfo.pntClrs = m_clrs.gpu;
-		m_FrameInfo.pos.x = m_carcam.getPos().x;
-		m_FrameInfo.pos.y = m_carcam.getPos().y;
-		m_FrameInfo.pos.z = m_carcam.getPos().z;
-		
+		m_FrameInfo.pos = m_carcam.getPos();
+		m_FrameInfo.minDist = 0.15 / VOXEL_SIZE;
+		m_FrameInfo.maxDist = 4.0 / VOXEL_SIZE;
+
 		//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
 		gvdb.setFrameInformation(m_FrameInfo);
 		Vector3DF test;
 		test.Set(0,0,0);	
 		gvdb.Compute(FUNC_MAPPING_UPDATE, 0, 1, test, false, false);
 		gvdb.UpdateApron(0, 0.0f);
+		gvdb.UpdateApron(1, 0.0f);
 		PERF_POP();
 
 

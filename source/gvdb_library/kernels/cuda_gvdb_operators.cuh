@@ -120,7 +120,6 @@ __device__ void UpdateApron(VDBInfo* gvdb, const uchar channel, const int brickC
 			value = surf3Dread<T>(gvdb->volOut[channel], uint(offs.x) * sizeof(T), uint(offs.y), uint(offs.z));
 		}
 	}
-
 	// Write to the apron voxel
 	surf3Dwrite(value, gvdb->volOut[channel], atlasVoxel.x * sizeof(T), atlasVoxel.y, atlasVoxel.z);
 }

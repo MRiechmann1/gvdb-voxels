@@ -324,6 +324,8 @@
 		Vector3DF	camu;
 		Vector3DF	camv;
 		Vector3DF	pos;
+		float  		maxDist; // in voxels number
+		float  		minDist; // in voxels number
 	};
 
 	

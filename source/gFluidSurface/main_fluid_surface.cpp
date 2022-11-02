@@ -203,7 +203,7 @@ bool Sample::init()
 	m_id = 0;
 	m_origin = Vector3DF(0, 0, 0);
 	m_radius = 1.0;
-	m_rebuild_gpu = true;
+	m_rebuild_gpu = false;
 	srand ( 6572 );
 
 	init2D ( "arial" );
