@@ -19,6 +19,7 @@
 	
 	
 	extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, float tmax );
+	extern "C" __global__ void convertToPC (int3 res, float4 row1, float4 row2, float4 row3, float4 row4);
 	
 
 #endif

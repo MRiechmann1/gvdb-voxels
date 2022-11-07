@@ -41,6 +41,9 @@ find_package(Utils REQUIRED)
 # Find OptiX
 find_package(Optix REQUIRED)
 
+# Find OpenCV
+find_package(OpenCV REQUIRED)
+
 
 #---------------------------------------------------------------------PTX files
 # Compile the fluid system's source files into a PTX object library.
@@ -89,9 +92,9 @@ add_dependencies(${PROJECT_NAME_APP} gvdbCopy)
 # Add OptiX's libraries to the build:
 add_definitions(-DUSE_OPTIX)
 add_definitions(-DBUILD_OPTIX)
-target_link_libraries(${PROJECT_NAME_APP} PUBLIC ${OPTIX_LIB} ${OPTIX_LIBU})
+target_link_libraries(${PROJECT_NAME_APP} PUBLIC ${OPTIX_LIB} ${OPTIX_LIBU} ${OpenCV_LIBRARIES})
 # Add OptiX's include file directory to the search paths:
-target_include_directories(${PROJECT_NAME_APP} PRIVATE "${OPTIX_ROOT_DIR}/include")
+target_include_directories(${PROJECT_NAME_APP} PRIVATE "${OPTIX_ROOT_DIR}/include" ${OpenCV_INCLUDE_DIRS})
 
 # Set asset path definition:
 if(NOT DEFINED ASSET_PATH) 

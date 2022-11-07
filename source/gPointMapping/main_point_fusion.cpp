@@ -19,6 +19,8 @@ using namespace nvdb;
 #include "nv_gui.h"			// gui system
 #include <GL/glew.h>
 #include <fstream> 
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 #include "string_helper.h"
 
@@ -26,8 +28,9 @@ using namespace nvdb;
 #define GRID_Y		10
 #define GRID_CNT	(GRID_X*GRID_Y)
 #define GRID_BMAX	(GRID_CNT*100)
-#define GRID_SCALE	5.0f
-#define VOXEL_SIZE 0.1f
+#define VOXEL_SIZE 	1.0f
+#define GRID_SCALE	1.0 / VOXEL_SIZE
+#define CAMERA_MAX_DIST 100.0f
 
 VolumeGVDB	gvdb;
 
@@ -47,6 +50,7 @@ struct ALIGN(16) ScanInfo {
 	CUdeviceptr	objGrid;
 	CUdeviceptr	objCnts;
 	CUdeviceptr	objList;
+	CUdeviceptr	pxlList;
 	CUdeviceptr pntList;
 	CUdeviceptr pntClrs;
 	Vector3DI	gridRes;
@@ -75,7 +79,7 @@ public:
 	void		GenerateCity ();	
 	void		ScanBuildings ();
 	void		SwitchCamera();
-	void		LoadKernel ( int fid, std::string func );	
+	void		LoadKernel ( int fid, std::string func1, std::string func2  );	
 
 	void		render_update();
 	void		render_frame();	
@@ -94,6 +98,7 @@ public:
 
 	int			m_maxpnts;					// Point list
 	int			m_numpnts;		
+	DataPtr		m_pxls;		
 	DataPtr		m_pnts;	
 	DataPtr		m_clrs;
 
@@ -103,6 +108,7 @@ public:
 	int			m_objnum;
 
 	CUfunction	m_Func;
+	CUfunction	m_FuncPC;
 	CUmodule	m_Module;
 	CUdeviceptr	m_cuScanInfo;
 	CUdeviceptr m_cuPntout;
@@ -389,6 +395,7 @@ void Sample::ScanBuildings ()
 	m_ScanInfo.objGrid = m_objgrid.gpu;
 	m_ScanInfo.objCnts = m_objcnts.gpu;
 	m_ScanInfo.objList = m_objlist.gpu;
+	m_ScanInfo.pxlList = m_pxls.gpu;
 	m_ScanInfo.pntList = m_pnts.gpu;
 	m_ScanInfo.pntClrs = m_clrs.gpu;
 	m_ScanInfo.rnd_seeds = m_seeds.gpu;
@@ -417,17 +424,27 @@ void Sample::ScanBuildings ()
 
 	if ( m_show_points ) {
 		m_pnts.usedNum = m_numpnts; m_pnts.size = sizeof(float)*m_numpnts;
+		m_pxls.usedNum = m_numpnts; m_pxls.size = sizeof(float)*m_numpnts;
 		m_clrs.usedNum = m_numpnts; m_clrs.size = sizeof(uint)*m_numpnts;
-		gvdb.RetrieveData ( m_pnts );
+		gvdb.RetrieveData ( m_pxls );
 		gvdb.RetrieveData ( m_clrs );
+		cv::Mat imgD = cv::Mat(180, 240, CV_32FC1, m_pxls.cpu);
+		cv::Mat imgC = cv::Mat(180, 240, CV_8UC4, m_clrs.cpu);
+		cv::threshold(imgD, imgD, CAMERA_MAX_DIST*GRID_SCALE, CAMERA_MAX_DIST*GRID_SCALE, cv::THRESH_TOZERO_INV);
+		imgD /= CAMERA_MAX_DIST*GRID_SCALE;
+		cv::imshow("depth", imgD);
+		cv::imshow("color", imgC);
+		cv::waitKey(1);
 	}
 }
 
-void Sample::LoadKernel ( int fid, std::string func )
+void Sample::LoadKernel ( int fid, std::string func1, std::string func2 )
 {
-	char cfn[512];		strcpy ( cfn, func.c_str() );
-
+	char cfn[512];		strcpy ( cfn, func1.c_str() );
 	cudaCheck ( cuModuleGetFunction ( &m_Func, m_Module, cfn ), "LoadKernel", "cuModuleGetFunction", cfn, "", true );	
+	strcpy ( cfn, func2.c_str() );
+	cudaCheck ( cuModuleGetFunction ( &m_FuncPC, m_Module, cfn ), "LoadKernel", "cuModuleGetFunction", cfn, "", true );	
+
 }
 
 void Sample::SetupGVDB()
@@ -462,7 +479,7 @@ bool Sample::init()
 	m_show_objs = false;
 	m_radius = 1;		
 	m_origin = Vector3DF(0,0,0);
-	m_shade_style = 2;
+	m_shade_style = 1;		// TODO: change to 2 
 	m_generate = true;
 	m_show_pov = true;
 	m_use_color = true;
@@ -493,7 +510,8 @@ bool Sample::init()
 
 	// Load custom CUDA function
 	cudaCheck ( cuModuleLoad ( &m_Module, "point_fusion_cuda.ptx" ), "PointFusion", "LoadKernel", "cuModulpntListeLoad", "point_fusion_cuda.ptx", true );
-	LoadKernel ( 0, "scanBuildings" );
+	LoadKernel ( 0, "scanBuildings", "convertToPC" );
+
 	size_t len = 0;
 	cudaCheck ( cuModuleGetGlobal ( &m_cuScanInfo, &len, m_Module, "scan" ), "PointFusion", "LoadKernel", "cuModuleGetGlobal", "cuScanInfo", true );
 	cudaCheck ( cuModuleGetGlobal ( &m_cuPntout, &len, m_Module, "pntout"), "PointFusion", "LoadKernel", "cuModuleGetGlobal", "pntout", true);
@@ -534,6 +552,7 @@ bool Sample::init()
 	m_maxpnts = 1000000;
 	m_numpnts = 0;
 	gvdb.AllocData ( m_pnts, m_maxpnts, sizeof(float), true );
+	gvdb.AllocData ( m_pxls, m_maxpnts, sizeof(Vector3DF), true );
 	gvdb.AllocData ( m_clrs, m_maxpnts, sizeof(uint), true );	
 
 	// Setup GVDB topology & channels
@@ -558,7 +577,7 @@ bool Sample::init()
 	m_carcam.setAngles ( 180, 0, 0);
 	
 	lgt->setOrbit(Vector3DF(42, 40, 0), m_carcam.getPos(), 2000*GRID_SCALE, 1.0);
-	m_fovBorderLength = (4.0f/VOXEL_SIZE)  / m_carcam.tlRayWorld.z;
+	m_fovBorderLength = (CAMERA_MAX_DIST/VOXEL_SIZE)  / m_carcam.tlRayWorld.z;
 
 	// Initialize GUIs
 	start_guis ( m_w, m_h );
@@ -755,6 +774,34 @@ void Sample::display()
 		// Scan buildings
 		ScanBuildings ();
 
+		// convert img to pc
+		Vector3DF pos = m_carcam.getPos();
+		m_ScanInfo.cams = m_carcam.tlRayWorld;
+		m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
+		m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
+		m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
+		m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
+		m_ScanInfo.objGrid = m_objgrid.gpu;
+		m_ScanInfo.objCnts = m_objcnts.gpu;
+		m_ScanInfo.objList = m_objlist.gpu;
+		m_ScanInfo.pxlList = m_pxls.gpu;
+		m_ScanInfo.pntList = m_pnts.gpu;
+		m_ScanInfo.pntClrs = m_clrs.gpu;
+		m_ScanInfo.rnd_seeds = m_seeds.gpu;
+		
+		cudaCheck ( cuMemcpyHtoD ( m_cuScanInfo, &m_ScanInfo, sizeof(ScanInfo)), "PointFusion", "ScanBuildings", "cuMemcpyHtoD", "m_ScanInfo", true );
+
+		Vector3DI block ( 16, 16, 1 );
+		Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
+		Matrix4F invView = m_carcam.getInvViewProjMatrix();
+		Vector4DF row1(invView(0), invView(4), invView(8), invView(12));
+		Vector4DF row2(invView(1), invView(5), invView(9), invView(13));
+		Vector4DF row3(invView(2), invView(6), invView(10), invView(14));
+		Vector4DF row4(invView(3), invView(7), invView(11), invView(15));
+		void* args[5] = { &m_scanres, &row1, &row2, &row3, &row4 };
+		cudaCheck( cuLaunchKernel( m_FuncPC, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+			"PointFusion", "ScanBuildings", "cuLaunch", "convertToPC", true );
+
 		//render_update ();
 		//gvdb.ComputeKernel(m_Module, m_FuncMapUpdate, 1, true, true)
 		
@@ -793,8 +840,9 @@ void Sample::display()
 		m_FrameInfo.pntList = m_pnts.gpu;
 		m_FrameInfo.pntClrs = m_clrs.gpu;
 		m_FrameInfo.pos = m_carcam.getPos();
+		m_FrameInfo.numPts = m_numpnts;
 		m_FrameInfo.minDist = 0.15 / VOXEL_SIZE;
-		m_FrameInfo.maxDist = 4.0 / VOXEL_SIZE;
+		m_FrameInfo.maxDist = CAMERA_MAX_DIST / VOXEL_SIZE;
 
 		//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
 		gvdb.setFrameInformation(m_FrameInfo);
