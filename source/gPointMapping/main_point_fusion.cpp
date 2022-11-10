@@ -315,7 +315,7 @@ void Sample::GenerateCity ()
 	float curb_sz = 3.7f;					// width of curb
 	m_gridsz = (block_sz + lane_sz*2 + curb_sz*2);
 
-	m_city_ctr = Vector3DF( GRID_X*m_gridsz*0.5f, 0, GRID_Y*m_gridsz*0.5f );
+	m_city_ctr = Vector3DF( GRID_X*m_gridsz*0.5f, VOXEL_SIZE, GRID_Y*m_gridsz*0.5f );
 
 	gvdb.AllocData ( m_objgrid, GRID_CNT, sizeof(int), true );
 	gvdb.AllocData ( m_objcnts, GRID_CNT, sizeof(int), true );
@@ -327,7 +327,7 @@ void Sample::GenerateCity ()
 	for (int y=0; y < GRID_Y; y++ ) {
 		for (int x=0; x < GRID_X; x++ ) {
 
-			block_pos.Set ( x*m_gridsz + lane_sz+curb_sz, 0, y*m_gridsz + lane_sz+curb_sz );			
+			block_pos.Set ( x*m_gridsz + lane_sz+curb_sz, VOXEL_SIZE, y*m_gridsz + lane_sz+curb_sz );			
 			bloc.Set ( 0, 0, 0 );
 			first_obj = m_objnum;	
 			bcnt = 0;
@@ -793,7 +793,7 @@ void Sample::display()
 
 		Vector3DI block ( 16, 16, 1 );
 		Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
-		Matrix4F invView = m_carcam.getInvViewProjMatrix();
+		Matrix4F invView = m_carcam.getTransformMatrix();
 		Vector4DF row1(invView(0), invView(4), invView(8), invView(12));
 		Vector4DF row2(invView(1), invView(5), invView(9), invView(13));
 		Vector4DF row3(invView(2), invView(6), invView(10), invView(14));

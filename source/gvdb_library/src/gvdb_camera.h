@@ -107,7 +107,7 @@ using namespace nvdb;
 		// Utility functions
 		virtual void updateMatricies ();			// Updates camera axes and projection matricies
 		void updateFrustum ();						// Updates frustum planes
-		void updateIntrinsicMatrix();
+		void updatePointTransform();
 		Vector3DF inverseRay ( float x, float y, float z );
 		Vector3DF inverseRayProj ( float x, float y, float z );
 		Vector4DF project ( Vector3DF& p );
@@ -129,7 +129,7 @@ using namespace nvdb;
 		Matrix4F& getFullProjMatrix ()	{ return proj_matrix; }
 		Matrix4F& getModelMatrix()		{ return model_matrix; }
 		Matrix4F& getMVMatrix()			{ return mv_matrix; }
-		Matrix3F& getIntrinsicMatrix()  { return intrinsic_matrix; }
+		Matrix4F& getTransformMatrix()  { return transform_matrix; }
 		float getAspect ()				{ return mAspect; }
 		Vector3DF getU ();
 		Vector3DF getV ();
@@ -160,7 +160,7 @@ using namespace nvdb;
 		Matrix4F		tileproj_matrix;						// tiled projection matrix
 		Matrix4F		model_matrix;
 		Matrix4F		mv_matrix;
-		Matrix3F 		intrinsic_matrix;
+		Matrix4F 		transform_matrix;
 		float			frustum[6][4];							// frustum plane equations
 
 		bool			mOps[8];

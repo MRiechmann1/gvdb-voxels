@@ -116,11 +116,18 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 			}
 		}
 	}
-	if ( tnearest.x == NOHIT) { scan.pxlList[ y*res.x + x] = 0.0; return; }
+	if ( tnearest.x == NOHIT) { 
+		scan.pxlList[ y*res.x + x] = 0.0; 
+		scan.pntClrs[ y*res.x + x] = 0;	
+		return; 
+	}
 
 	atomicAdd(&pntout, 1);
 	
-	scan.pxlList[ y*res.x + x] = tnearest.x;
+	float3 normal = getViewRay( 0.5, 0.5 );
+	float3 hitPos = pos + tnearest.x * dir;
+	float n = dot(hitPos - pos, normal) / dot(normal, normal);
+	scan.pxlList[ y*res.x + x] = n;
 	scan.pntClrs[ y*res.x + x] = clr;	
 }
 
@@ -130,7 +137,14 @@ extern "C" __global__ void convertToPC (int3 res, float4 row1, float4 row2, floa
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if ( x >= res.x || y >= res.y ) return;
 
-	float4 pos2d = make_float4(x, y, scan.pxlList[ y*res.x + x], 1.0f);
+	float dist = -scan.pxlList[ y*res.x + x];
+
+	if (dist == 0) {
+		scan.pntList[ y*res.x + x] = make_float3(0, 0, 0);
+		return;
+	}
+
+	float4 pos2d = make_float4((float)(res.x - x)*dist, (float)y*dist, dist, 1.0f);
 	float4 pos3d;
 	pos3d.x = dot(row1, pos2d);
 	pos3d.y = dot(row2, pos2d);

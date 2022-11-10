@@ -275,9 +275,18 @@ void Camera3D::setMatrices(const float* view_mtx, const float* proj_mtx, Vector3
 }
 
 void Camera3D::updatePointTransform() {
-	transform_matrix = tileproj_matrix;
-	transform_matrix *= view_matrix;
+	transform_matrix = view_matrix;
 	transform_matrix.InvertTRS();
+	Matrix4F intrinsics;
+	intrinsics = 0;					// Used for GVDB raytracing
+	intrinsics(0,0) = proj_matrix(0,0) * (240.0/2.0);			
+	intrinsics(1,1) = proj_matrix(1,1) * (180.0/2.0);			
+	intrinsics(0,2) = (240.0/2.0);				
+	intrinsics(1,2) = (180.0/2.0);				
+	intrinsics(2,2) = 1;			
+	intrinsics(3,3) = 1;		
+	intrinsics.InvertTRS();
+	transform_matrix *= intrinsics;
 }
 
 void Camera3D::setViewMatrix ( float* mtx, float* invmtx )
@@ -289,6 +298,7 @@ void Camera3D::setViewMatrix ( float* mtx, float* invmtx )
 	Vector3DF from(tmp(0, 3), tmp(1, 3), tmp(2, 3));
 	from_pos = from;
 	origRayWorld = from_pos; // Used by GVDB render
+	updatePointTransform();
 }
 void Camera3D::setProjMatrix ( float* mtx, float* invmtx )
 {
