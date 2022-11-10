@@ -21,7 +21,8 @@ struct ALIGN(16) ScanInfo {
 	int*		objGrid;
 	int*		objCnts;
 	Obj*		objList;
-	float*		pntList;
+	float*		pxlList;
+	float3*		pntList;
 	uint*		pntClrs;
 	int3		gridRes;
 	float3		gridSize;	
@@ -115,12 +116,29 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 			}
 		}
 	}
-	if ( tnearest.x == NOHIT) { scan.pntList[ y*res.x + x] = 0.0; return; }
+	if ( tnearest.x == NOHIT) { scan.pxlList[ y*res.x + x] = 0.0; return; }
 
 	atomicAdd(&pntout, 1);
 	
-	scan.pntList[ y*res.x + x] = tnearest.x;
+	scan.pxlList[ y*res.x + x] = tnearest.x;
 	scan.pntClrs[ y*res.x + x] = clr;	
+}
+
+
+extern "C" __global__ void convertToPC (int3 res, float4 row1, float4 row2, float4 row3, float4 row4) {	
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if ( x >= res.x || y >= res.y ) return;
+
+	float4 pos2d = make_float4(x, y, scan.pxlList[ y*res.x + x], 1.0f);
+	float4 pos3d;
+	pos3d.x = dot(row1, pos2d);
+	pos3d.y = dot(row2, pos2d);
+	pos3d.z = dot(row3, pos2d);
+	pos3d.w = dot(row4, pos2d);
+	
+	scan.pntList[ y*res.x + x] = make_float3(pos3d.x/pos3d.w, pos3d.y/pos3d.w, pos3d.z/pos3d.w);
+
 }
 
 /*__device__ float3 cameraPos; 	// camera origin
