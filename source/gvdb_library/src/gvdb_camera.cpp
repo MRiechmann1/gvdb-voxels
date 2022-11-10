@@ -225,7 +225,7 @@ void Camera3D::updateMatricies ()
 
 	origRayWorld = from_pos;
 	updateFrustum();
-	updateIntrinsicMatrix();
+	updatePointTransform();
 }
 
 void Camera3D::setModelMatrix ( float* mtx )
@@ -271,16 +271,13 @@ void Camera3D::setMatrices(const float* view_mtx, const float* proj_mtx, Vector3
 
 	origRayWorld = from - model_pos;
 	updateFrustum();								// DO NOT call updateMatrices here. We have just set them.
-	updateIntrinsicMatrix();
+	updatePointTransform();
 }
 
-void Camera3D::updateIntrinsicMatrix() {
-	float sx = (float) tan ( mFov * DEGtoRAD/2.0f);
-	float sy = sx / mAspect;
-	float tu, tv;
-	tu = mTile.x + x * (mTile.z-mTile.x);
-	tv = mTile.y + y * (mTile.w-mTile.y);
-	intrinsic_matrix = Matrix3F(sx, 0, tu, 0, sy, tv, 0, 0, 1);
+void Camera3D::updatePointTransform() {
+	transform_matrix = tileproj_matrix;
+	transform_matrix *= view_matrix;
+	transform_matrix.InvertTRS();
 }
 
 void Camera3D::setViewMatrix ( float* mtx, float* invmtx )
@@ -435,6 +432,7 @@ Vector4DF Camera3D::project ( Vector3DF& p, Matrix4F& vm )
 Vector4DF Camera3D::project ( Vector3DF& p )
 {
 	Vector4DF q = p;								// World coordinates
+	q.w = 1.0;
 	q *= view_matrix;								// Eye coordinates
 
 	q *= proj_matrix;								// Clip coordinates
