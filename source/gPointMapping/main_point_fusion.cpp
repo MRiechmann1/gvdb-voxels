@@ -31,6 +31,9 @@ using namespace nvdb;
 #define VOXEL_SIZE 	1.0f
 #define GRID_SCALE	1.0 / VOXEL_SIZE
 #define CAMERA_MAX_DIST 100.0f
+#define THRESH_PROB 3		//defined by reder pipeline
+#define MAX_PROB 10 + THRESH_PROB;
+#define MIN_PROB -10 + THRESH_PROB;
 
 VolumeGVDB	gvdb;
 
@@ -58,6 +61,7 @@ struct ALIGN(16) ScanInfo {
 	Vector3DF	cams;
 	Vector3DF	camu;
 	Vector3DF	camv;
+	Vector3DF	camn;
 	CUdeviceptr rnd_seeds;
 };
 
@@ -390,7 +394,9 @@ void Sample::ScanBuildings ()
 	m_ScanInfo.cams = m_carcam.tlRayWorld;
 	m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
 	m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
-	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
+	m_ScanInfo.camn = m_ScanInfo.camu*0.5 + m_ScanInfo.camv*0.5 + m_ScanInfo.cams;
+	m_ScanInfo.camn.Normalize();
+	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);
 	m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
 	m_ScanInfo.objGrid = m_objgrid.gpu;
 	m_ScanInfo.objCnts = m_objcnts.gpu;
@@ -775,7 +781,7 @@ void Sample::display()
 		ScanBuildings ();
 
 		// convert img to pc
-		Vector3DF pos = m_carcam.getPos();
+		//Vector3DF pos = m_carcam.getPos();
 		m_ScanInfo.cams = m_carcam.tlRayWorld;
 		m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
 		m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
@@ -832,17 +838,28 @@ void Sample::display()
 
 		// insert points
 		PERF_PUSH("Update");
-		m_FrameInfo.cams = m_carcam.tlRayWorld;
-		m_FrameInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
-		m_FrameInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
-		m_FrameInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
-		m_FrameInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
+		// TODO: Rename cams/camu/camv to smthg like inv_mat_row
+
+		Vector3DF s = m_carcam.tlRayWorld; s *= (CAMERA_MAX_DIST / m_carcam.getFar());
+		Vector3DF u = m_carcam.trRayWorld; u *= (CAMERA_MAX_DIST / m_carcam.getFar()); u -= s;
+		Vector3DF v = m_carcam.blRayWorld; v *= (CAMERA_MAX_DIST / m_carcam.getFar()); v -= s;
+
+		Matrix4F invMat(s.x, s.y, s.z, 0, u.x, u.y, u.z, 0, v.x, v.y, v.z, 0, 0, 0, 0, 1);
+		invMat.InvertTRS();
+
+		m_FrameInfo.cams = Vector3DF(invMat.data[0],invMat.data[4],invMat.data[8]);
+		m_FrameInfo.camu = Vector3DF(invMat.data[1],invMat.data[5],invMat.data[9]);
+		m_FrameInfo.camv = Vector3DF(invMat.data[2],invMat.data[6],invMat.data[10]);
+		m_FrameInfo.res = m_scanres;
 		m_FrameInfo.pntList = m_pnts.gpu;
 		m_FrameInfo.pntClrs = m_clrs.gpu;
 		m_FrameInfo.pos = m_carcam.getPos();
 		m_FrameInfo.numPts = m_numpnts;
 		m_FrameInfo.minDist = 0.15 / VOXEL_SIZE;
 		m_FrameInfo.maxDist = CAMERA_MAX_DIST / VOXEL_SIZE;
+		m_FrameInfo.maxProb = MAX_PROB;
+		m_FrameInfo.minProb = MIN_PROB;
+
 
 		//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
 		gvdb.setFrameInformation(m_FrameInfo);

@@ -29,6 +29,7 @@ struct ALIGN(16) ScanInfo {
 	float3		cams;
 	float3		camu;
 	float3		camv;
+	float3		camn;
 	uint*		rnd_seeds;
 };
 __device__ ScanInfo		scan;
@@ -124,9 +125,8 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 
 	atomicAdd(&pntout, 1);
 	
-	float3 normal = getViewRay( 0.5, 0.5 );
 	float3 hitPos = pos + tnearest.x * dir;
-	float n = dot(hitPos - pos, normal) / dot(normal, normal);
+	float n = dot(hitPos - pos, scan.camn) / dot(scan.camn, scan.camn); // TODO:Precalc second dot product
 	scan.pxlList[ y*res.x + x] = n;
 	scan.pntClrs[ y*res.x + x] = clr;	
 }
