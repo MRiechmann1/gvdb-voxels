@@ -318,8 +318,7 @@
 	struct ALIGN(16) FrameInfo {
 		CUdeviceptr pntList;
 		CUdeviceptr pntClrs;
-		Vector3DI	gridRes;
-		Vector3DF	gridSize;		
+		Vector3DI	res;		
 		Vector3DF	cams;
 		Vector3DF	camu;
 		Vector3DF	camv;
@@ -327,6 +326,8 @@
 		uint			numPts;
 		float  		maxDist; // in voxels number
 		float  		minDist; // in voxels number
+		float 		maxProb;
+		float		minProb;
 	};
 
 	

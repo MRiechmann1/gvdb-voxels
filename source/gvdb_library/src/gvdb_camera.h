@@ -160,7 +160,7 @@ using namespace nvdb;
 		Matrix4F		tileproj_matrix;						// tiled projection matrix
 		Matrix4F		model_matrix;
 		Matrix4F		mv_matrix;
-		Matrix4F 		transform_matrix;
+		Matrix4F 		transform_matrix;						// Matrix to transfer pixel into (camera/world space)
 		float			frustum[6][4];							// frustum plane equations
 
 		bool			mOps[8];

@@ -275,6 +275,7 @@ void Camera3D::setMatrices(const float* view_mtx, const float* proj_mtx, Vector3
 }
 
 void Camera3D::updatePointTransform() {
+	// updates the transformmatrix
 	transform_matrix = view_matrix;
 	transform_matrix.InvertTRS();
 	Matrix4F intrinsics;
@@ -287,6 +288,7 @@ void Camera3D::updatePointTransform() {
 	intrinsics(3,3) = 1;		
 	intrinsics.InvertTRS();
 	transform_matrix *= intrinsics;
+	//transform_matrix *= intrinsics;
 }
 
 void Camera3D::setViewMatrix ( float* mtx, float* invmtx )
@@ -358,10 +360,10 @@ void Camera3D::updateFrustum ()
    t = sqrt( frustum[5][0] * frustum[5][0] + frustum[5][1] * frustum[5][1] + frustum[5][2]    * frustum[5][2] );
    frustum[5][0] /= t; frustum[5][1] /= t; frustum[5][2] /= t; frustum[5][3] /= t;
 
-   tlRayWorld = inverseRayProj(-1.0f,  1.0f, mNear );
-   trRayWorld = inverseRayProj(1.0f, 1.0f, mNear );
-   blRayWorld = inverseRayProj(-1.0f, -1.0f, mNear );
-   brRayWorld = inverseRayProj(1.0f, -1.0f, mNear );
+   tlRayWorld = inverseRayProj(-1.0f,  1.0f, 1 ); // should be one instead of mNear
+   trRayWorld = inverseRayProj(1.0f, 1.0f, 1 );	  // camera coordinates are normalized so that mNear (camera space)
+   blRayWorld = inverseRayProj(-1.0f, -1.0f, 1 ); // is 0 in normalized projected camera coordinates
+   brRayWorld = inverseRayProj(1.0f, -1.0f, 1 );
 }
 
 float Camera3D::calculateLOD ( Vector3DF pnt, float minlod, float maxlod, float maxdist )
