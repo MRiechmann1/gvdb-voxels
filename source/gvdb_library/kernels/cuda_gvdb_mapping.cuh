@@ -14,8 +14,29 @@ struct ALIGN(16) FrameInfo {
 };
 __device__ FrameInfo		frame;
 
+// TODO: Optimize implementation -> reduce the number of branches (if and loops)
 
-bool __device__ __inline__ intersection(float3 box, float3 origin,float3 ray) {
+
+/*
+ * Implementation of taken from point_fusion_cuda.cu rayBoxIntersection and if condition adapted
+ * TODO: check why this is so much faster? No ifs? no register? -> no
+ */
+inline __device__ bool intersection (float3 box, float3 rpos, float3 rdir)
+{
+	register float ht[8];
+	ht[0] = (box.x - rpos.x)/rdir.x;
+	ht[1] = (box.x + 1.0f - rpos.x)/rdir.x;
+	ht[2] = (box.y - rpos.y)/rdir.y;
+	ht[3] = (box.y + 1.0f - rpos.y)/rdir.y;
+	ht[4] = (box.z - rpos.z)/rdir.z;
+	ht[5] = (box.z + 1.0f - rpos.z)/rdir.z;
+	ht[6] = fmax(fmax(fmin(ht[0], ht[1]), fmin(ht[2], ht[3])), fmin(ht[4], ht[5]));
+	ht[7] = fmin(fmin(fmax(ht[0], ht[1]), fmax(ht[2], ht[3])), fmax(ht[4], ht[5]));	
+	ht[6] = (ht[6] < 0 ) ? 0.0 : ht[6];
+	return ht[7]>=ht[6] && ht[7]>=0 && ht[6]<=1.0f;
+}
+
+/*bool __device__ __inline__ intersection(float3 box, float3 origin,float3 ray) {
     double tmin = -INFINITY, tmax = INFINITY;
 
     if (ray.x != 0.0) {
@@ -43,7 +64,7 @@ bool __device__ __inline__ intersection(float3 box, float3 origin,float3 ray) {
     }
 
     return tmax >= tmin && tmax <= 1.0;
-}
+}*/
 
 bool __device__ __inline__ inFrustrum(float3 koef) {
 	return koef.x <= 1.0 && koef.x >= 0 && 
@@ -216,8 +237,10 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 		return;
 	}
 	if (freeCount > 0) {
-		float prob = max(v - hitCount, frame.minProb);
-		surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+		/*uchar4 clr = make_uchar4(125, 125, 125, 255);
+		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);*/
+
+		float prob = max(v - hitCount, frame.minProb);//6;//max(v - hitCount, frame.minProb);
 		return;
 	}
 	return;
