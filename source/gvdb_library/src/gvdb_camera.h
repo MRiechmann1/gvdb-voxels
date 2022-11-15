@@ -84,6 +84,7 @@ using namespace nvdb;
 		void setNearFar (float n, float f )				{ mNear = n; mFar = f;		updateMatricies(); }
 		void setDolly(float d)							{ mDolly = d;				updateMatricies();  }
 		void setDist ( float d )						{ mOrbitDist = d;			updateMatricies(); }
+		void setRes ( Vector3DI resolution)				{ res = resolution;			updateMatricies(); }
 		void setTile ( float x1, float y1, float x2, float y2 )		{ mTile.Set ( x1, y1, x2, y2 );		updateMatricies(); }
 		void setProjection (eProjection proj_type);
 		void setModelMatrix ( float* mtx );
@@ -172,6 +173,7 @@ using namespace nvdb;
 		Vector4DF		trRayWorld;
 		Vector4DF		blRayWorld;
 		Vector4DF		brRayWorld;
+		Vector3DI 		res;
 	};
 
 	}

@@ -32,7 +32,7 @@ using namespace nvdb;
 #define GRID_SCALE	1.0 / VOXEL_SIZE
 #define CAMERA_MAX_DIST 100.0f
 #define THRESH_PROB 3		//defined by reder pipeline
-#define MAX_PROB 10 + THRESH_PROB;
+#define MAX_PROB 20000000 + THRESH_PROB;
 #define MIN_PROB -10 + THRESH_PROB;
 
 VolumeGVDB	gvdb;
@@ -81,9 +81,13 @@ public:
 	Vector3DF	getBuildingPos ( Vector3DF bloc, float block_max, Vector3DF bdim, Vector3DF& bsz);
 	Vector3DF	getBuildingPos ( Vector3DF bloc, float block_max );
 	void		GenerateCity ();	
-	void		ScanBuildings ();
 	void		SwitchCamera();
 	void		LoadKernel ( int fid, std::string func1, std::string func2  );	
+
+	void		ScanBuildings ();
+	void 		convertImgToPointCloud();
+	void 		activateRegion();
+	void 		updateMap();
 
 	void		render_update();
 	void		render_frame();	
@@ -153,6 +157,9 @@ Sample::Sample()
 	m_frame = -1;
 }
 
+/* 
+ * Setup Gui
+ */
 void handle_gui ( int gui, float val )
 {
 	switch ( gui ) {
@@ -164,6 +171,7 @@ void handle_gui ( int gui, float val )
 		break;
 	};
 }
+
 void Sample::SwitchCamera ()
 {
 	if (!m_show_pov) {
@@ -254,6 +262,9 @@ void Sample::RebuildOptixGraph ()
 	nvprintf("Rebuild Optix.. Done.\n");
 }
 
+/*
+ * Functions to Generate the simulated city
+ */
 Vector3DF Sample::getBuildingPos ( Vector3DF bloc, float block_max )
 {
 	Vector3DF tmp;
@@ -273,7 +284,6 @@ Vector3DF Sample::getBuildingPos ( Vector3DF bloc, float block_max, Vector3DF bd
 	};
 	return p;
 }
-
 
 void Sample::GenerateBuilding ( Vector3DF limits, Vector3DF& bloc, Vector3DF& bpos, Vector3DF& bsz, float block_max, float dctr ) 
 {
@@ -296,14 +306,12 @@ void Sample::GenerateBuilding ( Vector3DF limits, Vector3DF& bloc, Vector3DF& bp
 	}
 }
 
-
 Vector3DF Sample::LimitBuilding ( int first_obj, Vector3DF bloc ) 
 {
 	return Vector3DF(0,0,0);
 //	for (int n=first_obj; n < m_objs.size(); n++ ) {
 //}
 }
-
 
 void Sample::GenerateCity ()
 {
@@ -386,64 +394,9 @@ void Sample::GenerateCity ()
 	gvdb.CommitData ( m_objlist );
 }
 
-
-void Sample::ScanBuildings ()
-{
-	// Set scan info	
-	Vector3DF pos = m_carcam.getPos();
-	m_ScanInfo.cams = m_carcam.tlRayWorld;
-	m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
-	m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
-	m_ScanInfo.camn = m_ScanInfo.camu*0.5 + m_ScanInfo.camv*0.5 + m_ScanInfo.cams;
-	m_ScanInfo.camn.Normalize();
-	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);
-	m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
-	m_ScanInfo.objGrid = m_objgrid.gpu;
-	m_ScanInfo.objCnts = m_objcnts.gpu;
-	m_ScanInfo.objList = m_objlist.gpu;
-	m_ScanInfo.pxlList = m_pxls.gpu;
-	m_ScanInfo.pntList = m_pnts.gpu;
-	m_ScanInfo.pntClrs = m_clrs.gpu;
-	m_ScanInfo.rnd_seeds = m_seeds.gpu;
-	
-	cudaCheck ( cuMemcpyHtoD ( m_cuScanInfo, &m_ScanInfo, sizeof(ScanInfo)), "PointFusion", "ScanBuildings", "cuMemcpyHtoD", "m_ScanInfo", true );
-
-	Vector3DI block ( 16, 16, 1 );
-	Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
-	
-	// Max number of points per frame
-	m_numpnts = m_scanres.x * m_scanres.y;		
-	
-	float tmax = m_gridsz * 4* GRID_SCALE;
-
-	void* args[4] = { &pos, &m_scanres, &m_objnum, &tmax };
-
-	cudaCheck(cuMemsetD8(m_cuPntout, 0, sizeof(int)), "PointFusion", "ScanBuildings", "cuMemsetD8", "pntout", false);
-
-	cudaCheck( cuLaunchKernel( m_Func, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
-		"PointFusion", "ScanBuildings", "cuLaunch", "scanBuildings", true );
-
-	// Count hit points 
-	int pntout;
-	cudaCheck(cuMemcpyDtoH( &pntout, m_cuPntout, sizeof(int)), "PointFusion", "ScanBuildings", "cuMemsetDtoH", "pntout", false);
-	m_totalpnts += pntout;
-
-	if ( m_show_points ) {
-		m_pnts.usedNum = m_numpnts; m_pnts.size = sizeof(float)*m_numpnts;
-		m_pxls.usedNum = m_numpnts; m_pxls.size = sizeof(float)*m_numpnts;
-		m_clrs.usedNum = m_numpnts; m_clrs.size = sizeof(uint)*m_numpnts;
-		gvdb.RetrieveData ( m_pxls );
-		gvdb.RetrieveData ( m_clrs );
-		cv::Mat imgD = cv::Mat(180, 240, CV_32FC1, m_pxls.cpu);
-		cv::Mat imgC = cv::Mat(180, 240, CV_8UC4, m_clrs.cpu);
-		cv::threshold(imgD, imgD, CAMERA_MAX_DIST*GRID_SCALE, CAMERA_MAX_DIST*GRID_SCALE, cv::THRESH_TOZERO_INV);
-		imgD /= CAMERA_MAX_DIST*GRID_SCALE;
-		cv::imshow("depth", imgD);
-		cv::imshow("color", imgC);
-		cv::waitKey(1);
-	}
-}
-
+/*
+ * Setup functions
+ */
 void Sample::LoadKernel ( int fid, std::string func1, std::string func2 )
 {
 	char cfn[512];		strcpy ( cfn, func1.c_str() );
@@ -457,14 +410,14 @@ void Sample::SetupGVDB()
 {
 	// Configure
 	gvdb.Configure(3, 3, 3, 3, 5);
-	gvdb.DestroyChannels ();	
 	
 	gvdb.SetChannelDefault(16, 16, 8);
 	//TODO: For less memory usage set to T_UCHAR
 	// To do so, the renderes in source/gvdb_library/kernels/cuda_gvdb_raycast.cuh need to be adjusted to read uchar instead of float
 	// and chnage type of custom kernels
+	/*TODO: turning of color causes the program to crash -> check*/
 	gvdb.AddChannel(0, T_FLOAT, 1, F_LINEAR);			// change to uchar for better memory usage
-	gvdb.FillChannel(0, Vector4DF(3, 0, 0, 0));
+	gvdb.FillChannel(0, Vector4DF(0, 0, 0, 0));
 	if (m_use_color) {
 		gvdb.AddChannel(1, T_UCHAR4, 1, F_POINT);
 		gvdb.SetColorChannel(1);
@@ -581,6 +534,7 @@ bool Sample::init()
 	m_carcam.setDist ( 1400 );		
 	m_carcam.setPos ( 2*m_gridsz*GRID_SCALE, 4*GRID_SCALE, 2*m_gridsz*GRID_SCALE );	
 	m_carcam.setAngles ( 180, 0, 0);
+	m_carcam.setRes(m_scanres);
 	
 	lgt->setOrbit(Vector3DF(42, 40, 0), m_carcam.getPos(), 2000*GRID_SCALE, 1.0);
 	m_fovBorderLength = (CAMERA_MAX_DIST/VOXEL_SIZE)  / m_carcam.tlRayWorld.z;
@@ -611,43 +565,161 @@ void Sample::reshape (int w, int h)
 
 	postRedisplay();
 }
-void Sample::render_update()
+
+/*
+ * Computation
+ */
+void Sample::ScanBuildings ()
 {
-	// Rebuild GVDB Render topology
+	// Set scan info	
+	Vector3DF pos = m_carcam.getPos();
+	m_ScanInfo.cams = m_carcam.tlRayWorld;
+	m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
+	m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
+	m_ScanInfo.camn = m_ScanInfo.camu*0.5 + m_ScanInfo.camv*0.5 + m_ScanInfo.cams;
+	m_ScanInfo.camn.Normalize();
+	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);
+	m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
+	m_ScanInfo.objGrid = m_objgrid.gpu;
+	m_ScanInfo.objCnts = m_objcnts.gpu;
+	m_ScanInfo.objList = m_objlist.gpu;
+	m_ScanInfo.pxlList = m_pxls.gpu;
+	m_ScanInfo.pntList = m_pnts.gpu;
+	m_ScanInfo.pntClrs = m_clrs.gpu;
+	m_ScanInfo.rnd_seeds = m_seeds.gpu;
 	
-	PERF_PUSH("Dynamic Topology");	
-	gvdb.AccumulateTopology( m_numpnts, m_radius*2.0f, m_origin );
-	gvdb.FinishTopology(false, true);	// false. no commit pool	false. no compute bounds
-	gvdb.UpdateAtlas();
-	PERF_POP();
+	cudaCheck ( cuMemcpyHtoD ( m_cuScanInfo, &m_ScanInfo, sizeof(ScanInfo)), "PointFusion", "ScanBuildings", "cuMemcpyHtoD", "m_ScanInfo", true );
 
-	// Gather points to level set
-	PERF_PUSH("Points-to-Voxels");
+	Vector3DI block ( 16, 16, 1 );
+	Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
 	
+	// Max number of points per frame
+	m_numpnts = m_scanres.x * m_scanres.y;		
+	
+	float tmax = m_gridsz * 4* GRID_SCALE;
 
-	int scPntLen = 0;
-	int subcell_size = 4;
-	gvdb.InsertPointsSubcell (subcell_size, m_numpnts, m_radius*2.0f, m_origin, scPntLen);
-	gvdb.GatherLevelSet (subcell_size, m_numpnts, float(m_radius), m_origin, scPntLen, 0, 1, true );		// true = accumulate
-	gvdb.UpdateApron(0, 0.0f);	
-	PERF_POP();
+	void* args[4] = { &pos, &m_scanres, &m_objnum, &tmax };
 
-	if (m_render_optix) {
-		PERF_PUSH("Update OptiX");
-		optx.UpdateVolume(&gvdb);			// GVDB topology has changed
-		PERF_POP();
+	cudaCheck(cuMemsetD8(m_cuPntout, 0, sizeof(int)), "PointFusion", "ScanBuildings", "cuMemsetD8", "pntout", false);
+
+	cudaCheck( cuLaunchKernel( m_Func, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+		"PointFusion", "ScanBuildings", "cuLaunch", "scanBuildings", true );
+
+	// Count hit points 
+	int pntout;
+	cudaCheck(cuMemcpyDtoH( &pntout, m_cuPntout, sizeof(int)), "PointFusion", "ScanBuildings", "cuMemsetDtoH", "pntout", false);
+	m_totalpnts += pntout;
+
+	if ( m_show_points ) {
+		m_pnts.usedNum = m_numpnts; m_pnts.size = sizeof(float)*m_numpnts;
+		m_pxls.usedNum = m_numpnts; m_pxls.size = sizeof(float)*m_numpnts;
+		m_clrs.usedNum = m_numpnts; m_clrs.size = sizeof(uint)*m_numpnts;
+		gvdb.RetrieveData ( m_pxls );
+		gvdb.RetrieveData ( m_clrs );
+		cv::Mat imgD = cv::Mat(m_scanres.y, m_scanres.x, CV_32FC1, m_pxls.cpu);
+		cv::Mat imgC = cv::Mat(m_scanres.y, m_scanres.x, CV_8UC4, m_clrs.cpu);
+		cv::threshold(imgD, imgD, CAMERA_MAX_DIST*GRID_SCALE, CAMERA_MAX_DIST*GRID_SCALE, cv::THRESH_TOZERO_INV);
+		imgD /= CAMERA_MAX_DIST*GRID_SCALE;
+		cv::imshow("depth", imgD);
+		cv::imshow("color", imgC);
+		cv::waitKey(1);
 	}
-
-	char buf[1024];
-	Vector3DF ext, vox, used, free;
-	gvdb.getUsage(ext, vox, used, free);
-	sprintf(buf, "%6.0f / %6.0f MB (%4.3f%%)", free.y-free.x, free.y, (free.y-free.x)*100.0 / free.y); m_mem = buf;	
-	sprintf(buf, "%d x %d x %d", (int)ext.x, (int)ext.y, (int)ext.z); m_ext = buf;
-	sprintf(buf, "%d brk, %dM vox, %4.3f%%", (int)vox.x, (int)vox.y, vox.z); m_vox = buf;
-	sprintf(buf, "%6.2fM pnts", float(m_totalpnts) / 1000000.0f ); m_pt = buf;
-	
 }
 
+void Sample::convertImgToPointCloud() {
+	// convert img to pc
+	//Vector3DF pos = m_carcam.getPos();
+	m_ScanInfo.cams = m_carcam.tlRayWorld;
+	m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
+	m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
+	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
+	m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
+	m_ScanInfo.objGrid = m_objgrid.gpu;
+	m_ScanInfo.objCnts = m_objcnts.gpu;
+	m_ScanInfo.objList = m_objlist.gpu;
+	m_ScanInfo.pxlList = m_pxls.gpu;
+	m_ScanInfo.pntList = m_pnts.gpu;
+	m_ScanInfo.pntClrs = m_clrs.gpu;
+	m_ScanInfo.rnd_seeds = m_seeds.gpu;
+	cudaCheck ( cuMemcpyHtoD ( m_cuScanInfo, &m_ScanInfo, sizeof(ScanInfo)), "PointFusion", "ScanBuildings", "cuMemcpyHtoD", "m_ScanInfo", true );
+
+	Vector3DI block ( 16, 16, 1 );
+	Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
+	Matrix4F invView = m_carcam.getTransformMatrix();
+	Vector4DF row1(invView(0), invView(4), invView(8), invView(12));
+	Vector4DF row2(invView(1), invView(5), invView(9), invView(13));
+	Vector4DF row3(invView(2), invView(6), invView(10), invView(14));
+	Vector4DF row4(invView(3), invView(7), invView(11), invView(15));
+	void* args[5] = { &m_scanres, &row1, &row2, &row3, &row4 };
+	cudaCheck( cuLaunchKernel( m_FuncPC, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+		"PointFusion", "ScanBuildings", "cuLaunch", "convertToPC", true );
+}
+
+void Sample::activateRegion() {
+	// Activate Voxels and rebuild topology
+	PERF_PUSH("Dynamic Topology");	
+	// calculate fov bounding box:
+	// 1: all 5 points
+	Vector3DF p[5];
+	p[0] = m_carcam.from_pos;
+	p[1] = p[0] + Vector3DF(m_carcam.tlRayWorld) * m_fovBorderLength;
+	p[2] = p[0] + Vector3DF(m_carcam.trRayWorld) * m_fovBorderLength;
+	p[3] = p[0] + Vector3DF(m_carcam.blRayWorld) * m_fovBorderLength;
+	p[4] = p[0] + Vector3DF(m_carcam.brRayWorld) * m_fovBorderLength;
+	// 2: min and max values
+	Vector3DF min, max;
+	min.x = std::max(0.0f, std::min(p[0].x, std::min(p[1].x, std::min(p[2].x, std::min(p[3].x, p[4].x)))));
+	min.y = std::max(0.0f, std::min(p[0].y, std::min(p[1].y, std::min(p[2].y, std::min(p[3].y, p[4].y)))));
+	min.z = std::max(0.0f, std::min(p[0].z, std::min(p[1].z, std::min(p[2].z, std::min(p[3].z, p[4].z)))));
+	max.x = std::max(p[0].x, std::max(p[1].x, std::max(p[2].x, std::max(p[3].x, p[4].x))));
+	max.y = std::max(p[0].y, std::max(p[1].y, std::max(p[2].y, std::max(p[3].y, p[4].y))));
+	max.z = std::max(p[0].z, std::max(p[1].z, std::max(p[2].z, std::max(p[3].z, p[4].z))));
+
+	gvdb.ActivateSpace ( min, max );
+
+	gvdb.FinishTopology();	// false. no commit pool	false. no compute bounds
+	gvdb.UpdateAtlas();
+	PERF_POP();
+}
+
+void Sample::updateMap() {
+	// insert points
+	PERF_PUSH("Update");
+	// TODO: Rename cams/camu/camv to smthg like inv_mat_row
+
+	Vector3DF s = m_carcam.tlRayWorld; s *= (CAMERA_MAX_DIST / m_carcam.getFar());
+	Vector3DF u = m_carcam.trRayWorld; u *= (CAMERA_MAX_DIST / m_carcam.getFar()); u -= s;
+	Vector3DF v = m_carcam.blRayWorld; v *= (CAMERA_MAX_DIST / m_carcam.getFar()); v -= s;
+
+	Matrix4F invMat(s.x, s.y, s.z, 0, u.x, u.y, u.z, 0, v.x, v.y, v.z, 0, 0, 0, 0, 1);
+	invMat.InvertTRS();
+
+	m_FrameInfo.cams = Vector3DF(invMat.data[0],invMat.data[4],invMat.data[8]);
+	m_FrameInfo.camu = Vector3DF(invMat.data[1],invMat.data[5],invMat.data[9]);
+	m_FrameInfo.camv = Vector3DF(invMat.data[2],invMat.data[6],invMat.data[10]);
+	m_FrameInfo.res = m_scanres;
+	m_FrameInfo.pntList = m_pnts.gpu;
+	m_FrameInfo.pntClrs = m_clrs.gpu;
+	m_FrameInfo.pos = m_carcam.getPos();
+	m_FrameInfo.numPts = m_numpnts;
+	m_FrameInfo.minDist = 0.15 / VOXEL_SIZE;
+	m_FrameInfo.maxDist = CAMERA_MAX_DIST / VOXEL_SIZE;
+	m_FrameInfo.maxProb = MAX_PROB;
+	m_FrameInfo.minProb = MIN_PROB;
+
+	//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
+	gvdb.setFrameInformation(m_FrameInfo);
+	Vector3DF test;
+	test.Set(0,0,0);	
+	gvdb.Compute(FUNC_MAPPING_UPDATE, 0, 1, test, false, false);
+	gvdb.UpdateApron(0, 0.0f);
+	gvdb.UpdateApron(1, 0.0f);
+	PERF_POP();
+}
+
+/*
+ * Visualization
+ */
 void Sample::render_frame()
 {
 	// Render frame
@@ -727,13 +799,6 @@ void Sample::draw_objects ()
 	end3D ();
 }
 
-
-void Sample::draw_points ()
-{
-
-}
-
-
 void Sample::draw_topology ()
 {
 	start3D(gvdb.getScene()->getCamera());		// start 3D drawing
@@ -756,7 +821,6 @@ void Sample::draw_topology ()
 	end3D();										// end 3D drawing
 }
 
-
 void Sample::display() 
 {
 	// Update sample convergence
@@ -777,99 +841,13 @@ void Sample::display()
 
 	if (m_generate) {		
 
-		// Scan buildings
 		ScanBuildings ();
 
-		// convert img to pc
-		//Vector3DF pos = m_carcam.getPos();
-		m_ScanInfo.cams = m_carcam.tlRayWorld;
-		m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
-		m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
-		m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
-		m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
-		m_ScanInfo.objGrid = m_objgrid.gpu;
-		m_ScanInfo.objCnts = m_objcnts.gpu;
-		m_ScanInfo.objList = m_objlist.gpu;
-		m_ScanInfo.pxlList = m_pxls.gpu;
-		m_ScanInfo.pntList = m_pnts.gpu;
-		m_ScanInfo.pntClrs = m_clrs.gpu;
-		m_ScanInfo.rnd_seeds = m_seeds.gpu;
+		convertImgToPointCloud();
 		
-		cudaCheck ( cuMemcpyHtoD ( m_cuScanInfo, &m_ScanInfo, sizeof(ScanInfo)), "PointFusion", "ScanBuildings", "cuMemcpyHtoD", "m_ScanInfo", true );
+		activateRegion();
 
-		Vector3DI block ( 16, 16, 1 );
-		Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
-		Matrix4F invView = m_carcam.getTransformMatrix();
-		Vector4DF row1(invView(0), invView(4), invView(8), invView(12));
-		Vector4DF row2(invView(1), invView(5), invView(9), invView(13));
-		Vector4DF row3(invView(2), invView(6), invView(10), invView(14));
-		Vector4DF row4(invView(3), invView(7), invView(11), invView(15));
-		void* args[5] = { &m_scanres, &row1, &row2, &row3, &row4 };
-		cudaCheck( cuLaunchKernel( m_FuncPC, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
-			"PointFusion", "ScanBuildings", "cuLaunch", "convertToPC", true );
-
-		//render_update ();
-		//gvdb.ComputeKernel(m_Module, m_FuncMapUpdate, 1, true, true)
-		
-		// Activate Voxels and rebuild topology
-		PERF_PUSH("Dynamic Topology");	
-		// calculate fov bounding box:
-		// 1: all 5 points
-		Vector3DF p[5];
-		p[0] = m_carcam.from_pos;
-		p[1] = p[0] + Vector3DF(m_carcam.tlRayWorld) * m_fovBorderLength;
-		p[2] = p[0] + Vector3DF(m_carcam.trRayWorld) * m_fovBorderLength;
-		p[3] = p[0] + Vector3DF(m_carcam.blRayWorld) * m_fovBorderLength;
-		p[4] = p[0] + Vector3DF(m_carcam.brRayWorld) * m_fovBorderLength;
-		// 2: min and max values
-		Vector3DF min, max;
-		min.x = std::max(0.0f, std::min(p[0].x, std::min(p[1].x, std::min(p[2].x, std::min(p[3].x, p[4].x)))));
-		min.y = std::max(0.0f, std::min(p[0].y, std::min(p[1].y, std::min(p[2].y, std::min(p[3].y, p[4].y)))));
-		min.z = std::max(0.0f, std::min(p[0].z, std::min(p[1].z, std::min(p[2].z, std::min(p[3].z, p[4].z)))));
-		max.x = std::max(p[0].x, std::max(p[1].x, std::max(p[2].x, std::max(p[3].x, p[4].x))));
-		max.y = std::max(p[0].y, std::max(p[1].y, std::max(p[2].y, std::max(p[3].y, p[4].y))));
-		max.z = std::max(p[0].z, std::max(p[1].z, std::max(p[2].z, std::max(p[3].z, p[4].z))));
-
-		gvdb.ActivateSpace ( min, max );
-
-		gvdb.FinishTopology();	// false. no commit pool	false. no compute bounds
-		gvdb.UpdateAtlas();
-		PERF_POP();
-
-		// insert points
-		PERF_PUSH("Update");
-		// TODO: Rename cams/camu/camv to smthg like inv_mat_row
-
-		Vector3DF s = m_carcam.tlRayWorld; s *= (CAMERA_MAX_DIST / m_carcam.getFar());
-		Vector3DF u = m_carcam.trRayWorld; u *= (CAMERA_MAX_DIST / m_carcam.getFar()); u -= s;
-		Vector3DF v = m_carcam.blRayWorld; v *= (CAMERA_MAX_DIST / m_carcam.getFar()); v -= s;
-
-		Matrix4F invMat(s.x, s.y, s.z, 0, u.x, u.y, u.z, 0, v.x, v.y, v.z, 0, 0, 0, 0, 1);
-		invMat.InvertTRS();
-
-		m_FrameInfo.cams = Vector3DF(invMat.data[0],invMat.data[4],invMat.data[8]);
-		m_FrameInfo.camu = Vector3DF(invMat.data[1],invMat.data[5],invMat.data[9]);
-		m_FrameInfo.camv = Vector3DF(invMat.data[2],invMat.data[6],invMat.data[10]);
-		m_FrameInfo.res = m_scanres;
-		m_FrameInfo.pntList = m_pnts.gpu;
-		m_FrameInfo.pntClrs = m_clrs.gpu;
-		m_FrameInfo.pos = m_carcam.getPos();
-		m_FrameInfo.numPts = m_numpnts;
-		m_FrameInfo.minDist = 0.15 / VOXEL_SIZE;
-		m_FrameInfo.maxDist = CAMERA_MAX_DIST / VOXEL_SIZE;
-		m_FrameInfo.maxProb = MAX_PROB;
-		m_FrameInfo.minProb = MIN_PROB;
-
-
-		//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
-		gvdb.setFrameInformation(m_FrameInfo);
-		Vector3DF test;
-		test.Set(0,0,0);	
-		gvdb.Compute(FUNC_MAPPING_UPDATE, 0, 1, test, false, false);
-		gvdb.UpdateApron(0, 0.0f);
-		gvdb.UpdateApron(1, 0.0f);
-		PERF_POP();
-
+		updateMap();
 
 		if (m_render_optix) {
 			PERF_PUSH("Update OptiX");
@@ -900,7 +878,6 @@ void Sample::display()
 	glClear(GL_DEPTH_BUFFER_BIT);
 
 	if ( m_show_objs)	draw_objects ();
-	if ( m_show_points) draw_points ();
 	if ( m_show_topo )	draw_topology ();
 	if ( !m_show_pov )	draw_camera ();
 
@@ -911,6 +888,9 @@ void Sample::display()
 	postRedisplay();								// Post redisplay since simulation is continuous	
 }
 
+/*
+ * Camera/Gui control
+ */
 void Sample::motion(int x, int y, int dx, int dy) 
 {
 	// Get camera for GVDB Scene
@@ -966,7 +946,6 @@ void Sample::motion(int x, int y, int dx, int dy)
 		nvprintf("lgt ang: %f %f %f\n\n", lgt->getAng().x, lgt->getAng().y, lgt->getAng().z);		
 	}
 }
-
 
 void Sample::keyboardchar(unsigned char key, int mods, int x, int y)
 {

@@ -280,10 +280,10 @@ void Camera3D::updatePointTransform() {
 	transform_matrix.InvertTRS();
 	Matrix4F intrinsics;
 	intrinsics = 0;					// Used for GVDB raytracing
-	intrinsics(0,0) = proj_matrix(0,0) * (240.0/2.0);			
-	intrinsics(1,1) = proj_matrix(1,1) * (180.0/2.0);			
-	intrinsics(0,2) = (240.0/2.0);				
-	intrinsics(1,2) = (180.0/2.0);				
+	intrinsics(0,0) = proj_matrix(0,0) * ((float)res.x/2.0);			
+	intrinsics(1,1) = proj_matrix(1,1) * ((float)res.y/2.0);			
+	intrinsics(0,2) = ((float)res.x/2.0);				
+	intrinsics(1,2) = ((float)res.y/2.0);				
 	intrinsics(2,2) = 1;			
 	intrinsics(3,3) = 1;		
 	intrinsics.InvertTRS();

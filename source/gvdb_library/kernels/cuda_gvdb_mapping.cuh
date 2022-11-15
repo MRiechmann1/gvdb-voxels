@@ -83,55 +83,31 @@ float3 __device__ __inline__ minValue(float3 *koef) {
 	minV.x = min(minV.x, koef[7].x);
 	minV.x = max(minV.x, 0.0);*/
 
-	minV.y = min(koef[0].y, koef[1].y);
-	minV.y = min(minV.y, koef[2].y);
-	minV.y = min(minV.y, koef[3].y);
-	minV.y = min(minV.y, koef[4].y);
-	minV.y = min(minV.y, koef[5].y);
-	minV.y = min(minV.y, koef[6].y);
-	minV.y = min(minV.y, koef[7].y);
-	minV.y = max(minV.y, 0.0);
+	minV.y = max(min(min(min(koef[0].y / koef[0].x, koef[1].y / koef[1].x), min(koef[2].y / koef[2].x, koef[3].y / koef[3].x)), 
+				 min(min(koef[4].y / koef[4].x, koef[5].y / koef[5].x), min(koef[6].y / koef[6].x, koef[7].y / koef[7].x))), 0.0f);
 
-	minV.z = min(koef[0].z, koef[1].z);
-	minV.z = min(minV.z, koef[2].z);
-	minV.z = min(minV.z, koef[3].z);
-	minV.z = min(minV.z, koef[4].z);
-	minV.z = min(minV.z, koef[5].z);
-	minV.z = min(minV.z, koef[6].z);
-	minV.z = min(minV.z, koef[7].z);
-	minV.z = max(minV.z, 0.0);
+	minV.z = max(min(min(min(koef[0].z / koef[0].x, koef[1].z / koef[1].x), min(koef[2].z / koef[2].x, koef[3].z / koef[3].x)), 
+				 min(min(koef[4].z / koef[4].x, koef[5].z / koef[5].x), min(koef[6].z / koef[6].x, koef[7].z / koef[7].x))), 0.0f);
 
 	return minV;
 }
 
 float3 __device__ __inline__ maxValue(float3 *koef) {
 	float3 minV;
-	/*minV.x = max(koef[0].x, koef[1].x);
-	minV.x = max(minV.x, koef[2].x);
-	minV.x = max(minV.x, koef[3].x);
-	minV.x = max(minV.x, koef[4].x);
-	minV.x = max(minV.x, koef[5].x);
-	minV.x = max(minV.x, koef[6].x);
-	minV.x = max(minV.x, koef[7].x);
+	/*minV.x = max(koef[0].x / koef[0].x, koef[1].x / koef[0].x);
+	minV.x = max(minV.x, koef[2].x) / koef[2].x;
+	minV.x = max(minV.x, koef[3].x / koef[3].x);
+	minV.x = max(minV.x, koef[4].x / koef[4].x);
+	minV.x = max(minV.x, koef[5].x / koef[5].x);
+	minV.x = max(minV.x, koef[6].x / koef[6].x);
+	minV.x = max(minV.x, koef[7].x / koef[7].x);
 	minV.x = min(minV.x, 1.0);*/
 
-	minV.y = max(koef[0].y / koef[0].x, koef[1].y / koef[1].x);
-	minV.y = max(minV.y, koef[2].y / koef[2].x);
-	minV.y = max(minV.y, koef[3].y / koef[3].x);
-	minV.y = max(minV.y, koef[4].y / koef[4].x);
-	minV.y = max(minV.y, koef[5].y / koef[5].x);
-	minV.y = max(minV.y, koef[6].y / koef[6].x);
-	minV.y = max(minV.y, koef[7].y / koef[7].x);
-	minV.y = min(minV.y, 1.0);
+	minV.y = min(max(max(max(koef[0].y / koef[0].x, koef[1].y / koef[1].x), max(koef[2].y / koef[2].x, koef[3].y / koef[3].x)), 
+				 	 max(max(koef[4].y / koef[4].x, koef[5].y / koef[5].x), max(koef[6].y / koef[6].x, koef[7].y / koef[7].x))), 1.0f);
 
-	minV.z = max(koef[0].z / koef[0].x, koef[1].z / koef[1].x);
-	minV.z = max(minV.z, koef[2].z / koef[2].x);
-	minV.z = max(minV.z, koef[3].z / koef[3].x);
-	minV.z = max(minV.z, koef[4].z / koef[4].x);
-	minV.z = max(minV.z, koef[5].z / koef[5].x);
-	minV.z = max(minV.z, koef[6].z / koef[6].x);
-	minV.z = max(minV.z, koef[7].z / koef[7].x);
-	minV.z = min(minV.z, 1.0);
+	minV.z = min(max(max(max(koef[0].z / koef[0].x, koef[1].z / koef[1].x), max(koef[2].z / koef[2].x, koef[3].z / koef[3].x)), 
+					 max(max(koef[4].z / koef[4].x, koef[5].z / koef[5].x), max(koef[6].z / koef[6].x, koef[7].z / koef[7].x))), 1.0f);
 
 	return minV;
 }
@@ -221,6 +197,10 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 				} else if (hitCount == 0 && intersection(wpos, frame.pos, frame.pntList[i] - frame.pos)) {
 					freeCount++;
 				}
+			} else {
+				/* TODO: When no point could be measured the area from the measurment to maximum range is probably free*/
+				// -> check if voxel intersects ray from camera to pixel at maximum distance
+				freeCount++;
 			}
 		}
 	}
@@ -240,7 +220,9 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 		/*uchar4 clr = make_uchar4(125, 125, 125, 255);
 		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);*/
 
-		float prob = max(v - hitCount, frame.minProb);//6;//max(v - hitCount, frame.minProb);
+		// TODO:-> give a free/occupied prob update value to the function
+		float prob = max(v - freeCount/100, frame.minProb);//6;//max(v - hitCount, frame.minProb); 
+		surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 		return;
 	}
 	return;
