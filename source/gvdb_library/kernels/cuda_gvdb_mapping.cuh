@@ -226,55 +226,12 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 		return;
 	}
 	return;
-	/*
-		uchar4 clr = ((uchar4 *)frame.pntClrs)[i];
-		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
-
-				float prob = 6; // setVolumeRange setzt -1 als max (nur danm gerendert) anpassen der von setVolumeRange und renderPipeline
-				surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);*/
-
-	/*if (frame.pntList[21600].x <= wpos.x || frame.pntList[21600].x > wpos.x+1 ||
-		frame.pntList[21600].y <= wpos.y || frame.pntList[21600].y > wpos.y+1 ||
-		frame.pntList[21600].y <= wpos.y || frame.pntList[21600].y > wpos.y+1) return;*/
-	/*float3 centerRay = 0.5*scan.camu + 0.5*scan.camv + scan.cams;
-	float3 hitPos = pos + tnearest.x * dir;
-	float n = dot(hitPos - pos, normal) / dot(normal, normal);	*/
-	
-	
-	
-	/*for (uint i = 0; i < frame.numPts; i++) {
-		if (frame.pntList[i].x >= wpos.x && frame.pntList[i].x < wpos.x+1 &&
-		frame.pntList[i].y >= wpos.y && frame.pntList[i].y < wpos.y+1 &&
-		frame.pntList[i].z >= wpos.z && frame.pntList[i].z < wpos.z+1) {
-		//if (intersection(wpos, frame.pos, frame.pntList[i])) {
-			uchar4 clr = make_uchar4(255, 125, 125, 255);
-			surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
-
-			float prob = 6; // setVolumeRange setzt -1 als max (nur danm gerendert) anpassen der von setVolumeRange und renderPipeline
-			surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
-		}
-	}
-
-	return;*/
-
-	// write color
-
-
-	/*
-	 * Check if voxel is in fov
-	 */	
-	//wnorm = wpos / len;
-	//dotGlobal = dot(wnorm, cameraZ);
-	//if (dotGlobal < 0.3420214) return; 	// 0.3420214 is equivalent to 70 degree
-										// a value smaller means the angle is greater than 70 degree and therefor out of fov
-
-	/*
-	 * Find corresponding rays
-	 */
-	//xRef = dot(cameraY, wnorm);
-	//yRef = dot(cameraX, wnorm);*/
 
 }
+
+
+// Follow the implementation of insert point (identify voxels that need to be updated) -> check how the range is tested
+// then perform the insetion
 
 // Follow the implementation of scanBuilding (especially raxbox intersect), to implemnt ray casting based insertion
 // Voxel based implementation see board
