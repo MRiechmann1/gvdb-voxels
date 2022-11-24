@@ -112,6 +112,9 @@ float3 __device__ __inline__ maxValue(float3 *koef) {
 	return minV;
 }
 
+/*
+ * Considers cams camu camv as rows 1-3 of the inverse volume equation fo the view frustrum
+ */
 extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar chan,float p1, float p2, float p3  )
 {
 	float3 relPos, wpos, wnorm, xRef, yRef, koef[8];
@@ -236,6 +239,98 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 // Follow the implementation of scanBuilding (especially raxbox intersect), to implemnt ray casting based insertion
 // Voxel based implementation see board
 
+/*struct ALIGN(16) RaycastUpdate {
+	float3*		pntList;
+	uint*		pntClrs;
+	int3		res;	
+	float3		cams;
+	float3		camu;
+	float3		camv;
+	float3 		pos;
+	uint 		numPts;
+	float*		voxelsCpy;
+	int3		voxelCpyOffset;
+	int3  		voxelCpyDim;
+};
+__device__ RaycastUpdate		rayInfo;
+
+
+/*
+ * Considers cams camu camv the borders vectors of the view frustrum
+ * /
+extern "C" __global__ void gvdbUpdateMapPC ( int3 res )
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if ( x >= res.x || y >= res.y ) return;
+
+	float3 point = rayInfo.pntList[ y * res.x +x];
+	int3 vox = make_int3(point);
+	vox = vox - rayInfo.voxelCpyOffset;
+	atomicAdd(&rayInfo.voxelsCpy[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z], 1);
+
+}
+
+extern "C" __global__ void gvdbUpdateMapRaycast ( int3 res )
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if ( x >= res.x || y >= res.y ) return;
+
+	//float3 jit = jitter_sample();
+	float3 point = rayInfo.pntList[ y * res.x +x];
+
+
+	float3 ray = point - rayInfo.pos;
+	float dist = length(ray);
+	float3 sign = ray;
+	sign.x = sign.x / abs(sign.x);
+	sign.y = sign.y / abs(sign.y);
+	sign.z = sign.z / abs(sign.z);
+
+	float t = 0.0;
+	float3 curPos = rayInfo.pos;
+	int3 vox = make_int3(curPos);
+	float3 step;
+	while (t < 1.0) {
+		if (rayInfo.voxelsCpy[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z] <= 0) {
+			atomicAdd(&rayInfo.voxelsCpy[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z], -1.0/100.0);
+		}
+		//step
+		step.x = ((float)vox.x + sign.x - curPos.x) / ray.x;
+		step.y = ((float)vox.y + sign.y - curPos.x) / ray.y;
+		step.z = ((float)vox.z + sign.z - curPos.x) / ray.z;
+		t += min(min(step.x, step.y), step.z);
+		vox = make_int3(rayInfo.pos + t * ray);
+	}
+}
+
+extern "C" __global__ void gvdbUpdateMapVoxelCpy ( VDBInfo* gvdb, int3 atlasRes, uchar chan,float p1, float p2, float p3  )
+{
+	float3 wpos;
+	GVDB_VOXUNPACKED
+
+	if ( !getAtlasToWorld ( gvdb, atlasIdx, wpos )) return;
+	
+	// is in region
+	if (wpos.x < rayInfo.voxelCpyOffset.x || wpos.x > rayInfo.voxelCpyOffset.x + rayInfo.voxelCpyDim.x || 
+		wpos.y < rayInfo.voxelCpyOffset.y || wpos.y > rayInfo.voxelCpyOffset.y + rayInfo.voxelCpyDim.y || 
+		wpos.z < rayInfo.voxelCpyOffset.z || wpos.z > rayInfo.voxelCpyOffset.z + rayInfo.voxelCpyDim.z ) return;
+	
+	int3 vox = make_int3(wpos)-rayInfo.voxelCpyOffset;
+	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	v += rayInfo.voxelsCpy[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z];
+	surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	if ( v > 3) {
+		uchar4 clr = make_uchar4(255, 125, 125, 255);
+		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+		return;
+	}
+
+	uchar4 clr = make_uchar4(0, 0, 0, 0);
+	surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+}
+*/
 /*	
 FOR DEBUGGING
 	# if __CUDA_ARCH__>=200

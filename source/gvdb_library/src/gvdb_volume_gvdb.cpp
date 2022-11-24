@@ -327,7 +327,10 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_NOISE,				"gvdbOpNoise",					MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 	LoadFunction ( FUNC_CLR_EXPAND,			"gvdbOpClrExpand",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 	LoadFunction ( FUNC_EXPANDC,			"gvdbOpExpandC",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
-	LoadFunction ( FUNC_MAPPING_UPDATE,		"gvdbUpdateMap",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
+	LoadFunction ( FUNC_MAPPING_UPDATE,		"gvdbUpdateMap",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );		
+	//LoadFunction ( FUNC_MAPPING_UPDATE_PC,	"gvdbUpdateMapPC",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
+	//LoadFunction ( FUNC_MAPPING_UPDATE_RAY,	"gvdbUpdateMapRaycast",			MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
+	//LoadFunction ( FUNC_MAPPING_UPDATE_VOX,	"gvdbUpdateMapVoxelCpy",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 
 	
 
@@ -341,6 +344,12 @@ void VolumeGVDB::setFrameInformation(FrameInfo &frame) {
 	cudaCheck ( cuMemcpyHtoD ( cuFrameInfo, &frame, sizeof(FrameInfo)), "VolumeGVDB", "gvdbUpdateMap", "cuMemcpyHtoD", "m_ScanInfo", true );
 	POP_CTX
 }
+
+/*void VolumeGVDB::setRaycastInformation(RaycastUpdate &raycastUpdate) {
+	PUSH_CTX
+	cudaCheck ( cuMemcpyHtoD ( cuRaycastUpdate, &raycastUpdate, sizeof(RaycastUpdate)), "VolumeGVDB", "gvdbUpdateMap", "cuMemcpyHtoD", "m_ScanInfo", true );
+	POP_CTX
+}*/
 
 // Reset to default module
 void VolumeGVDB::SetModule ()
@@ -360,6 +369,7 @@ void VolumeGVDB::SetModule ( CUmodule module )
 	size_t len = 0;
 	cudaCheck ( cuModuleGetGlobal ( &cuScnInfo, &len,	module, "scn" ),	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuScnInfo", mbDebug);
 	cudaCheck ( cuModuleGetGlobal ( &cuFrameInfo, &len, module, "frame" ), 	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuFrameInfo", mbDebug );
+	//cudaCheck ( cuModuleGetGlobal ( &cuRaycastUpdate, &len, module, "rayInfo" ), 	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuRaycastUpdate", mbDebug );
 
 	cudaCheck ( cuModuleGetGlobal ( &cuXform,  &len,	module, "cxform" ), "VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuXform", mbDebug);
 	cudaCheck ( cuModuleGetGlobal ( &cuDebug,  &len,	module, "cdebug" ), "VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuDebug", mbDebug);
@@ -5241,6 +5251,57 @@ void VolumeGVDB::MapExtraGVDB (int subcell_size)
 	PERF_POP();
 	POP_CTX
 }
+
+/*void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
+	DataPtr	voxels;
+	Vector3DF viewFrustrum[] = {
+		ray_info.pos,
+		ray_info.pos + ray_info.cams,
+		ray_info.pos + ray_info.cams + ray_info.camu,
+		ray_info.pos + ray_info.cams + ray_info.camv,
+		ray_info.pos + ray_info.cams + ray_info.camu + ray_info.camv
+	};
+	Vector3DF minRegion;
+	minRegion.x = floor(std::min(std::min(std::min(viewFrustrum[0].x, viewFrustrum[1].x), viewFrustrum[2].x), std::min(viewFrustrum[3].x, viewFrustrum[4].x)));
+	minRegion.y = floor(std::min(std::min(std::min(viewFrustrum[0].y, viewFrustrum[1].y), viewFrustrum[2].y), std::min(viewFrustrum[3].y, viewFrustrum[4].y)));
+	minRegion.z = floor(std::min(std::min(std::min(viewFrustrum[0].z, viewFrustrum[1].z), viewFrustrum[2].z), std::min(viewFrustrum[3].z, viewFrustrum[4].z)));
+	Vector3DF maxRegion;
+	maxRegion.x = ceil(std::max(std::max(std::max(viewFrustrum[0].x, viewFrustrum[1].x), viewFrustrum[2].x), std::max(viewFrustrum[3].x, viewFrustrum[4].x)));
+	maxRegion.y = ceil(std::max(std::max(std::max(viewFrustrum[0].y, viewFrustrum[1].y), viewFrustrum[2].y), std::max(viewFrustrum[3].y, viewFrustrum[4].y)));
+	maxRegion.z = ceil(std::max(std::max(std::max(viewFrustrum[0].z, viewFrustrum[1].z), viewFrustrum[2].z), std::max(viewFrustrum[3].z, viewFrustrum[4].z)));
+	Vector3DI dimensionsRegion = maxRegion - minRegion;
+	int sizeRegion = dimensionsRegion.x * dimensionsRegion.y * dimensionsRegion.z;
+	//AllocData(voxels, sizeRegion, sizeof(float3), true);
+	ray_info.voxelsCpy = voxels.gpu;
+	ray_info.voxelCpyDim = dimensionsRegion;
+	ray_info.voxelCpyOffset = minRegion;
+
+	//setRaycastInformation(ray_info);
+	
+	// Perform Raycasting inside voxels
+	Vector3DI block ( 16, 16, 1 );
+	Vector3DI grid ( int(scan_res.x/block.x)+1, int(scan_res.y/block.y)+1, 1 );
+
+	/*void* args[1] = { &scan_res };
+	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_PC], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_PC_GVDB", mbDebug );
+	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_PC], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
+
+	Vector3DF test(0,0,0);
+	Compute(FUNC_MAPPING_UPDATE_VOX, 0, 1, test, false, false);* /
+	
+	/*Vector3DI block ( 16, 16, 1 );
+	Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
+	cudaCheck( cuLaunchKernel( m_Func, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+		"PointFusion", "ScanBuildings", "cuLaunch", "scanBuildings", true );* / 
+
+	// update map with values of voxels
+	
+	//FreeData(voxels);
+	//gvdb.AllocData ( m_pnts, m_maxpnts, sizeof(float), true );
+}*/
+
 
 void VolumeGVDB::InsertPoints ( int num_pnts, Vector3DF trans, bool bPrefix )
 {

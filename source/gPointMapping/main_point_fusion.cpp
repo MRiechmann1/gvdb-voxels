@@ -10,6 +10,8 @@ Note: one voxel has the default size 1 (no transform applied)
 For the view, one voxel size is considered as one cm
 */
 
+//#define USE_RAYCAST
+//
 // GVDB library
 #include "gvdb.h"			
 using namespace nvdb;
@@ -126,6 +128,7 @@ public:
 	/*Map Update Parameter*/
 	CUfunction	m_FuncMapUpdate;
 	FrameInfo	m_FrameInfo;	
+	//RaycastUpdate	m_RayInfo;
 	//CUdeviceptr	m_cuScanInfo;
 
 	int			m_w, m_h;
@@ -602,6 +605,7 @@ void Sample::ScanBuildings ()
 
 	cudaCheck(cuMemsetD8(m_cuPntout, 0, sizeof(int)), "PointFusion", "ScanBuildings", "cuMemsetD8", "pntout", false);
 
+    // creates the distance image (in voxel size units)
 	cudaCheck( cuLaunchKernel( m_Func, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"PointFusion", "ScanBuildings", "cuLaunch", "scanBuildings", true );
 
@@ -683,6 +687,7 @@ void Sample::activateRegion() {
 }
 
 void Sample::updateMap() {
+	//#ifndef USE_RAYCAST
 	// insert points
 	PERF_PUSH("Update");
 	// TODO: Rename cams/camu/camv to smthg like inv_mat_row
@@ -715,6 +720,23 @@ void Sample::updateMap() {
 	gvdb.UpdateApron(0, 0.0f);
 	gvdb.UpdateApron(1, 0.0f);
 	PERF_POP();
+	//#else
+
+	/*PERF_PUSH("Update");
+	Vector3DF pos = m_carcam.getPos();
+	m_RayInfo.cams = m_carcam.tlRayWorld;
+	m_RayInfo.camu = m_carcam.trRayWorld; m_RayInfo.camu -= m_RayInfo.cams;
+	m_RayInfo.camv = m_carcam.blRayWorld; m_RayInfo.camv -= m_RayInfo.cams;
+	m_RayInfo.numPts = m_numpnts;
+	m_RayInfo.pntClrs = m_clrs.gpu;
+	m_RayInfo.pntList = m_pnts.gpu;
+	m_RayInfo.pos = pos;
+	m_RayInfo.res = m_scanres;
+
+	//gvdb.InsertScanRays(m_RayInfo, m_scanres);
+	PERF_POP();*/
+	
+	//#endif
 }
 
 /*

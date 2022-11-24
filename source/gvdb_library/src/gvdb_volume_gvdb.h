@@ -207,6 +207,9 @@
 	#define FUNC_CLR_EXPAND			116
 	#define FUNC_EXPANDC			117
 	#define FUNC_MAPPING_UPDATE		118
+	//#define FUNC_MAPPING_UPDATE_PC	119
+	//#define FUNC_MAPPING_UPDATE_RAY	120
+	//#define FUNC_MAPPING_UPDATE_VOX	121
 
 	#define MAX_FUNC				255
 
@@ -330,6 +333,20 @@
 		float		minProb;
 	};
 
+	/*struct ALIGN(16) RaycastUpdate {
+		CUdeviceptr		pntList;
+		CUdeviceptr		pntClrs;
+		Vector3DI		res;	
+		Vector3DF		cams;
+		Vector3DF		camu;
+		Vector3DF		camv;
+		Vector3DF 		pos;
+		uint 			numPts;
+		CUdeviceptr		voxelsCpy;
+		Vector3DI		voxelCpyOffset;
+		Vector3DI  		voxelCpyDim;
+	};*/
+
 	
 	class GVDB_API VolumeGVDB : public VolumeBase {
 	public:
@@ -351,6 +368,7 @@
 
 			// Mapping
 			void setFrameInformation(FrameInfo &frame);
+			//void setRaycastInformation(RaycastUpdate &frame);
 						
 			CUcontext getContext() { return mContext; }
 			CUdevice getDevice() { return mDevice; }
@@ -568,7 +586,8 @@
 
 			void MapExtraGVDB (int subcell_size);
 			void InsertPointsSubcell( int subcell_size, int num_pnts, float pRadius, Vector3DF trans, int& pSCPntsLength );
-			void InsertPointsSubcell_FP16(int subcell_size, int num_pnts, float radius, Vector3DF trans, int& pSCPntsLength);			
+			void InsertPointsSubcell_FP16(int subcell_size, int num_pnts, float radius, Vector3DF trans, int& pSCPntsLength);	
+			//void InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res);		
 
 			void ScalePntPos(int num_pnts, float scale);
 			void ScatterDensity			(int num_pnts, float radius, float amp, Vector3DF trans, bool expand = true, bool avgColor = false );			
@@ -883,6 +902,7 @@
 
 			// Mapping
 			CUdeviceptr	cuFrameInfo;
+			//CUdeviceptr	cuRaycastUpdate;
 
 			// CUDA Device & Context
 			int				mDevSelect;
