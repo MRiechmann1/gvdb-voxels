@@ -207,9 +207,9 @@
 	#define FUNC_CLR_EXPAND			116
 	#define FUNC_EXPANDC			117
 	#define FUNC_MAPPING_UPDATE		118
-	//#define FUNC_MAPPING_UPDATE_PC	119
-	//#define FUNC_MAPPING_UPDATE_RAY	120
-	//#define FUNC_MAPPING_UPDATE_VOX	121
+	#define FUNC_MAPPING_UPDATE_PC	119
+	#define FUNC_MAPPING_UPDATE_RAY	120
+	#define FUNC_MAPPING_UPDATE_VOX	121
 
 	#define MAX_FUNC				255
 
@@ -333,7 +333,7 @@
 		float		minProb;
 	};
 
-	/*struct ALIGN(16) RaycastUpdate {
+	struct ALIGN(16) RaycastUpdate {
 		CUdeviceptr		pntList;
 		CUdeviceptr		pntClrs;
 		Vector3DI		res;	
@@ -345,7 +345,8 @@
 		CUdeviceptr		voxelsCpy;
 		Vector3DI		voxelCpyOffset;
 		Vector3DI  		voxelCpyDim;
-	};*/
+		CUdeviceptr  	voxelCpyClr;
+	};
 
 	
 	class GVDB_API VolumeGVDB : public VolumeBase {
@@ -368,7 +369,7 @@
 
 			// Mapping
 			void setFrameInformation(FrameInfo &frame);
-			//void setRaycastInformation(RaycastUpdate &frame);
+			void setRaycastInformation(RaycastUpdate &frame);
 						
 			CUcontext getContext() { return mContext; }
 			CUdevice getDevice() { return mDevice; }
@@ -389,6 +390,8 @@
 			// otherwise, it uses a grid of size `mPool->getAtlasRes(...)`.
 			// Passes the elements of `parameters` to the kernel as p1, p2, and p3.
 			void Compute ( int effect, uchar channel, int num_iterations, Vector3DF parameters, bool bUpdateApron, bool skipOverAprons, float boundval = 0.0f );
+			void ComputeRegion ( int effect, uchar channel, int num_iterations, Vector3DF parameters, Vector3DF regionMin, Vector3DF regionDim, bool bUpdateApron, bool skipOverAprons, float boundval = 0.0f );
+			
 			// Runs a custom user compute kernel, `user_kernel`, in the module `user_module`,
 			// passing in argument `channel`. This must have the function signature
 			// `func(VDBInfo* gvdb, int3 atlasRes, uchar channel)`
@@ -587,7 +590,7 @@
 			void MapExtraGVDB (int subcell_size);
 			void InsertPointsSubcell( int subcell_size, int num_pnts, float pRadius, Vector3DF trans, int& pSCPntsLength );
 			void InsertPointsSubcell_FP16(int subcell_size, int num_pnts, float radius, Vector3DF trans, int& pSCPntsLength);	
-			//void InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res);		
+			void InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res);		
 
 			void ScalePntPos(int num_pnts, float scale);
 			void ScatterDensity			(int num_pnts, float radius, float amp, Vector3DF trans, bool expand = true, bool avgColor = false );			
@@ -902,7 +905,7 @@
 
 			// Mapping
 			CUdeviceptr	cuFrameInfo;
-			//CUdeviceptr	cuRaycastUpdate;
+			CUdeviceptr	cuRaycastUpdate;
 
 			// CUDA Device & Context
 			int				mDevSelect;

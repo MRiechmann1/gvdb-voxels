@@ -30,6 +30,7 @@ struct ALIGN(16) ScanInfo {
 	float3		camu;
 	float3		camv;
 	float3		camn;
+	float		maxDist;
 	uint*		rnd_seeds;
 };
 __device__ ScanInfo		scan;
@@ -117,7 +118,7 @@ extern "C" __global__ void scanBuildings ( float3 pos, int3 res, int num_obj, fl
 			}
 		}
 	}
-	if ( tnearest.x == NOHIT) { 
+	if ( tnearest.x == NOHIT || tnearest.x > scan.maxDist) { 
 		scan.pxlList[ y*res.x + x] = 0.0; 
 		scan.pntClrs[ y*res.x + x] = 0;	
 		return; 

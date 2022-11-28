@@ -10,7 +10,7 @@ Note: one voxel has the default size 1 (no transform applied)
 For the view, one voxel size is considered as one cm
 */
 
-//#define USE_RAYCAST
+#define USE_RAYCAST
 //
 // GVDB library
 #include "gvdb.h"			
@@ -23,6 +23,7 @@ using namespace nvdb;
 #include <fstream> 
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <chrono>
 
 #include "string_helper.h"
 
@@ -64,6 +65,7 @@ struct ALIGN(16) ScanInfo {
 	Vector3DF	camu;
 	Vector3DF	camv;
 	Vector3DF	camn;
+	float 		maxDist;
 	CUdeviceptr rnd_seeds;
 };
 
@@ -128,7 +130,7 @@ public:
 	/*Map Update Parameter*/
 	CUfunction	m_FuncMapUpdate;
 	FrameInfo	m_FrameInfo;	
-	//RaycastUpdate	m_RayInfo;
+	RaycastUpdate	m_RayInfo;
 	//CUdeviceptr	m_cuScanInfo;
 
 	int			m_w, m_h;
@@ -149,6 +151,8 @@ public:
 	std::string m_mem, m_vox, m_ext, m_pt;
 	long		m_totalpnts;
 	float 		m_fovBorderLength;
+	long		m_counter;
+	std::chrono::steady_clock::time_point begin;
 
 	Camera3D	m_carcam;
 };
@@ -158,6 +162,7 @@ Sample sample_obj;
 Sample::Sample()
 {
 	m_frame = -1;
+	m_counter = 0;
 }
 
 /* 
@@ -540,7 +545,7 @@ bool Sample::init()
 	m_carcam.setRes(m_scanres);
 	
 	lgt->setOrbit(Vector3DF(42, 40, 0), m_carcam.getPos(), 2000*GRID_SCALE, 1.0);
-	m_fovBorderLength = (CAMERA_MAX_DIST/VOXEL_SIZE)  / m_carcam.tlRayWorld.z;
+	m_fovBorderLength = CAMERA_MAX_DIST / m_carcam.getFar();
 
 	// Initialize GUIs
 	start_guis ( m_w, m_h );
@@ -576,9 +581,9 @@ void Sample::ScanBuildings ()
 {
 	// Set scan info	
 	Vector3DF pos = m_carcam.getPos();
-	m_ScanInfo.cams = m_carcam.tlRayWorld;
-	m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
-	m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
+	m_ScanInfo.cams = m_carcam.tlRayWorld * m_fovBorderLength;
+	m_ScanInfo.camu = m_carcam.trRayWorld * m_fovBorderLength; m_ScanInfo.camu -= m_ScanInfo.cams;
+	m_ScanInfo.camv = m_carcam.blRayWorld * m_fovBorderLength; m_ScanInfo.camv -= m_ScanInfo.cams;
 	m_ScanInfo.camn = m_ScanInfo.camu*0.5 + m_ScanInfo.camv*0.5 + m_ScanInfo.cams;
 	m_ScanInfo.camn.Normalize();
 	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);
@@ -589,6 +594,7 @@ void Sample::ScanBuildings ()
 	m_ScanInfo.pxlList = m_pxls.gpu;
 	m_ScanInfo.pntList = m_pnts.gpu;
 	m_ScanInfo.pntClrs = m_clrs.gpu;
+	m_ScanInfo.maxDist = CAMERA_MAX_DIST;
 	m_ScanInfo.rnd_seeds = m_seeds.gpu;
 	
 	cudaCheck ( cuMemcpyHtoD ( m_cuScanInfo, &m_ScanInfo, sizeof(ScanInfo)), "PointFusion", "ScanBuildings", "cuMemcpyHtoD", "m_ScanInfo", true );
@@ -633,9 +639,9 @@ void Sample::ScanBuildings ()
 void Sample::convertImgToPointCloud() {
 	// convert img to pc
 	//Vector3DF pos = m_carcam.getPos();
-	m_ScanInfo.cams = m_carcam.tlRayWorld;
-	m_ScanInfo.camu = m_carcam.trRayWorld; m_ScanInfo.camu -= m_ScanInfo.cams;
-	m_ScanInfo.camv = m_carcam.blRayWorld; m_ScanInfo.camv -= m_ScanInfo.cams;
+	m_ScanInfo.cams = m_carcam.tlRayWorld * m_fovBorderLength;
+	m_ScanInfo.camu = m_carcam.trRayWorld * m_fovBorderLength; m_ScanInfo.camu -= m_ScanInfo.cams;
+	m_ScanInfo.camv = m_carcam.blRayWorld * m_fovBorderLength; m_ScanInfo.camv -= m_ScanInfo.cams;
 	m_ScanInfo.gridRes = Vector3DI(GRID_X, GRID_Y, 0);	
 	m_ScanInfo.gridSize = Vector3DF(GRID_X*m_gridsz, GRID_Y*m_gridsz, 0) * GRID_SCALE;
 	m_ScanInfo.objGrid = m_objgrid.gpu;
@@ -687,7 +693,7 @@ void Sample::activateRegion() {
 }
 
 void Sample::updateMap() {
-	//#ifndef USE_RAYCAST
+	#ifndef USE_RAYCAST
 	// insert points
 	PERF_PUSH("Update");
 	// TODO: Rename cams/camu/camv to smthg like inv_mat_row
@@ -720,23 +726,25 @@ void Sample::updateMap() {
 	gvdb.UpdateApron(0, 0.0f);
 	gvdb.UpdateApron(1, 0.0f);
 	PERF_POP();
-	//#else
+	#else
 
-	/*PERF_PUSH("Update");
+	PERF_PUSH("Update");
 	Vector3DF pos = m_carcam.getPos();
-	m_RayInfo.cams = m_carcam.tlRayWorld;
-	m_RayInfo.camu = m_carcam.trRayWorld; m_RayInfo.camu -= m_RayInfo.cams;
-	m_RayInfo.camv = m_carcam.blRayWorld; m_RayInfo.camv -= m_RayInfo.cams;
+	m_RayInfo.cams = m_carcam.tlRayWorld * m_fovBorderLength;
+	m_RayInfo.camu = m_carcam.trRayWorld * m_fovBorderLength; m_RayInfo.camu -= m_RayInfo.cams;
+	m_RayInfo.camv = m_carcam.blRayWorld * m_fovBorderLength; m_RayInfo.camv -= m_RayInfo.cams;
 	m_RayInfo.numPts = m_numpnts;
 	m_RayInfo.pntClrs = m_clrs.gpu;
 	m_RayInfo.pntList = m_pnts.gpu;
 	m_RayInfo.pos = pos;
 	m_RayInfo.res = m_scanres;
 
-	//gvdb.InsertScanRays(m_RayInfo, m_scanres);
-	PERF_POP();*/
+	gvdb.InsertScanRays(m_RayInfo, m_scanres);
+	gvdb.UpdateApron(0, 0.0f);
+	gvdb.UpdateApron(1, 0.0f);
+	PERF_POP();
 	
-	//#endif
+	#endif
 }
 
 /*
@@ -861,7 +869,10 @@ void Sample::display()
 		cam->setAngles(m_carcam.getAng().x, m_carcam.getAng().y, m_carcam.getAng().z);
 	}
 
-	if (m_generate) {		
+	if (m_generate) {	
+		if (m_counter == 0)
+			begin = std::chrono::steady_clock::now();
+		m_counter++;	
 
 		ScanBuildings ();
 
@@ -877,6 +888,8 @@ void Sample::display()
 			PERF_POP();
 		}
 		
+		std::chrono::steady_clock::time_point current = std::chrono::steady_clock::now();
+		std::cout << "Calculations per second: " << (float)m_counter / (float)std::chrono::duration_cast<std::chrono::seconds>(current - begin).count() << std::endl;
 		// must be called AFTER update apron
 		char buf[1024];
 		Vector3DF ext, vox, used, free;
