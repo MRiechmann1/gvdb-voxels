@@ -53,6 +53,15 @@
 
 	class GVDB_API Scene {
 	public:
+
+		static const long LOOK = 'l' << 24 | 'o' << 16 | 'o' << 8 | 'k';
+		static const long EYE  = 'e' << 24 | 'y' << 16 | 'e' << 8 | ' ';
+		static const long NEAR = 'n' << 24 | 'e' << 16 | 'a' << 8 | 'r';
+		static const long FAR  = 'f' << 24 | 'a' << 16 | 'r' << 8 | ' ';
+		static const long FOV  = 'f' << 24 | 'o' << 16 | 'v' << 8 | ' ';
+		static const long DIST = 'd' << 24 | 'i' << 16 | 's' << 8 | 't';
+		static const long ANGS = 'a' << 24 | 'n' << 16 | 'g' << 8 | 's';
+		static const long POS  = 'p' << 24 | 'o' << 16 | 's' << 8 | ' ';
 		Scene();
 		~Scene();
 		static Scene*			gScene;

@@ -647,25 +647,25 @@ void Scene::UpdateValue ( char obj, int objid, long varid, Vector3DF val )
 		// Camera			
 		Camera3D* cam = getCamera();
 		switch ( varid ) {
-		case 'look': cam->setToPos ( val.x, val.y, val.z );		break;
-		case 'eye ': cam->setPos ( val.x, val.y, val.z );		break;		
-		case 'near': cam->setNearFar ( val.x, cam->getFar());	break;
-		case 'far ': cam->setNearFar ( cam->getNear(), val.x );	break;				
-		case 'fov ': cam->setFov ( val.x );						break;
-		case 'dist': cam->setDist ( val.x );					break;
-		case 'angs': cam->setOrbit ( val, cam->getToPos(), cam->getOrbitDist(), cam->getOrbitDist() );	break;		
+		case LOOK: cam->setToPos ( val.x, val.y, val.z );		break;
+		case EYE : cam->setPos ( val.x, val.y, val.z );		break;		
+		case NEAR: cam->setNearFar ( val.x, cam->getFar());	break;
+		case FAR : cam->setNearFar ( cam->getNear(), val.x );	break;				
+		case FOV : cam->setFov ( val.x );						break;
+		case DIST: cam->setDist ( val.x );					break;
+		case ANGS: cam->setOrbit ( val, cam->getToPos(), cam->getOrbitDist(), cam->getOrbitDist() );	break;		
 		};
 	} else if ( obj=='L' ) {
 		// Light
 		Light* light = getLight();
 		switch ( varid ) {
-		case 'look': light->setToPos ( val.x, val.y, val.z );	break;
-		case 'pos ': light->setPos ( val.x, val.y, val.z );		break;
-		case 'near': light->setNearFar ( val.x, light->getFar());	break;
-		case 'far ': light->setNearFar ( light->getNear(), val.x );	break;		
-		case 'fov ': light->setFov ( val.x );					break;
-		case 'dist': light->setDist ( val.x );					break;
-		case 'angs': light->setOrbit ( val, light->getToPos(), light->getOrbitDist(), light->getOrbitDist() );	break;		
+		case LOOK: light->setToPos ( val.x, val.y, val.z );	break;
+		case POS : light->setPos ( val.x, val.y, val.z );		break;
+		case NEAR: light->setNearFar ( val.x, light->getFar());	break;
+		case FAR : light->setNearFar ( light->getNear(), val.x );	break;		
+		case FOV : light->setFov ( val.x );					break;
+		case DIST: light->setDist ( val.x );					break;
+		case ANGS: light->setOrbit ( val, light->getToPos(), light->getOrbitDist(), light->getOrbitDist() );	break;		
 		};			
 	} else if ( obj=='S' ) {
 		// Shadows
