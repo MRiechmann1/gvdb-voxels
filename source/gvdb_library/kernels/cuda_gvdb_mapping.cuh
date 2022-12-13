@@ -117,10 +117,7 @@ float3 __device__ __inline__ maxValue(float3 *koef) {
  */
 extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar chan,float p1, float p2, float p3  )
 {
-	float3 relPos, wpos, wnorm, xRef, yRef, koef[8];
-	int xmin, xmax, ymin, ymax;
-	float dotX, dotY, dotGlobal;
-	float len;
+	float3 relPos, wpos, yRef, koef[8];
 	GVDB_VOXUNPACKED
 
 	// TODO: Filter voxel not in region of the camera compare voxel to the (max values of the the grid?)
