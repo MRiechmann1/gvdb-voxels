@@ -48,25 +48,25 @@ void gprintf2(va_list &vlist, const char * fmt, int level)
         if(fmt2) free(fmt2);
         fmt2 = (char*)malloc(fmt2_sz);
     }
-    char *prefix = "";
+    char *prefix = (char *)"";
     switch(level)
     {
     case LOGLEVEL_WARNING:
-        prefix = "LOG *WARNING* >> ";
+        prefix = (char *)"LOG *WARNING* >> ";
 		return;
         break;
     case LOGLEVEL_ERROR:
-        prefix = "LOG **ERROR** >> ";
+        prefix = (char *)"LOG **ERROR** >> ";
         break;
     case LOGLEVEL_OK:
-        prefix = "LOG !OK! >> ";
+        prefix = (char *)"LOG !OK! >> ";
         break;
     case LOGLEVEL_INFO:
     default:
         break;
     }
-    ::printf(prefix);
-    ::printf(fmt2);
+    ::printf("%s", prefix);
+    ::printf("%s", fmt2);
 }
 void gprintf(const char * fmt, ...)
 {
