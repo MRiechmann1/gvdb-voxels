@@ -4337,7 +4337,7 @@ void VolumeGVDB::PrepareRender ( int w, int h, char shading )
 	// Depth buffer
 	mScnInfo.outbuf		= -1;			// NOT USED  (was mRenderBuf[0].gpu;)
 	int dbuf = getScene()->getDepthBuf();
-	mScnInfo.dbuf 		= (dbuf == 255 ? NULL : mRenderBuf[dbuf].gpu);	
+	mScnInfo.dbuf 		= (dbuf == 255 ? (int)NULL : mRenderBuf[dbuf].gpu);	
 
 	cudaCheck ( cuMemcpyHtoD ( cuScnInfo, &mScnInfo, sizeof(ScnInfo) ), "VolumeGVDB", "PrepareRender", "cuMemcpyHtoD", "cuScnInfo", mbDebug);
 
@@ -5775,7 +5775,7 @@ void VolumeGVDB::ScatterDensity ( int num_pnts, float radius, float amp, Vector3
 	int threads = 256;		
 	int pblks = int(num_pnts / threads)+1;	
 	
-    if (mAux[AUX_PNTCLR].gpu != NULL && avgColor) {
+    if (mAux[AUX_PNTCLR].gpu != (int)NULL && avgColor) {
 		Vector3DI brickResVec = getRes3DI(0);
 		num_voxels = brickResVec.x * brickResVec.y * brickResVec.z * static_cast<uint>(getNumUsedNodes(0));
 		if (mbProfile) PERF_PUSH("Prepare Aux");
@@ -5787,7 +5787,7 @@ void VolumeGVDB::ScatterDensity ( int num_pnts, float radius, float amp, Vector3
 	cudaCheck ( cuLaunchKernel ( cuFunc[FUNC_SCATTER_DENSITY], pblks, 1, 1, threads, 1, 1, 0, NULL, args, NULL ), 
 				"VolumeGVDB", "ScatterPointDensity", "cuLaunch", "FUNC_SCATTER_DENSITY", mbDebug);		
 
-	if (mAux[AUX_PNTCLR].gpu != NULL && avgColor) {
+	if (mAux[AUX_PNTCLR].gpu != (int)NULL && avgColor) {
 		int threads_avgcol = 256;
 		int pblks_avgcol = int(num_voxels / threads_avgcol) + 1;
 		void* args_avgcol[2] = { &num_voxels, &mAux[AUX_COLAVG].gpu };
