@@ -30,7 +30,7 @@
 #include<string>
 #include<stdarg.h>
 #include<unistd.h>
-#include<sys/timeb.h>
+#include<chrono>
 
 Display *g_dpy = 0;
 
@@ -747,10 +747,12 @@ void NVPWindow::sysWaitEvents(){
 }
 
 static int getMilliCount(){
-    timeb tb;
-    ftime(&tb);
+    std::chrono::milliseconds ms = std::chrono::duration_cast< std::chrono::milliseconds >(
+        std::chrono::system_clock::now().time_since_epoch()
+    );
 
-    int nCount = tb.millitm + (tb.time & 0xffffff) * 1000;
+
+    int nCount = ms.count();
     return nCount;
 
 }
@@ -1137,7 +1139,7 @@ bool WINinternal::create(const char *title,int width, int height){
         CWBorderPixel | CWColormap | CWEventMask | CWOverrideRedirect,&swa);
     sleep(1);
 
-    printf("Window : %d.\n",m_window);
+    printf("Window : %lu.\n",m_window);
     XFree(vi);
     
     XSetStandardProperties(m_dpy,m_window,title,title,None,NULL,0,NULL);
@@ -1258,7 +1260,7 @@ void nvprintf2(va_list &vlist, const char * fmt, int level)
 #endif
     sample_print(level, fmt2);
     //::printf(prefix);
-    ::printf(fmt2);
+    ::printf("%s", fmt2);
 }
 void nvprintf(const char * fmt, ...)
 {
