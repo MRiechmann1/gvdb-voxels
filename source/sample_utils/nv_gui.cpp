@@ -1474,9 +1474,9 @@ void nvGui::Draw ( nvImg* chrome )
 			case GUI_BOOL:		bval = *(bool*) mGui[n].data;	break;
 			};
 			if ( bval ) {
-				drawText ( x2-40, ty, "On", tc.x, tc.y, tc.z, tc.w );				
+				drawText ( x2-40, ty, (char *)"On", tc.x, tc.y, tc.z, tc.w );				
 			} else {
-				drawText ( x2-40, ty, "Off", tc.x, tc.y, tc.z, tc.w);
+				drawText ( x2-40, ty, (char *)"Off", tc.x, tc.y, tc.z, tc.w);
 			}
 			sprintf ( buf, "%s", mGui[n].name.c_str() );	
 			drawText ( tx, ty, buf, tc.x, tc.y, tc.z, tc.w );		
@@ -1489,7 +1489,7 @@ void nvGui::Draw ( nvImg* chrome )
 			if ( val >=0 && val < mGui[n].items.size() ) {
 				sprintf ( buf, "%s", mGui[n].items[val].c_str() );
 			} else {
-				sprintf ( buf, "" );
+				sprintf ( buf, " " );
 			}
 			drawText ( x3, ty, buf, tc.x, tc.y, tc.z, tc.w );
 			} break;
