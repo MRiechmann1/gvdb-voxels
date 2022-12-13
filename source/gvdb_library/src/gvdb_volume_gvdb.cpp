@@ -61,7 +61,7 @@ VolumeGVDB::VolumeGVDB ()
 {
 	TimeX start;
 	
-	mDevice = NULL;
+	mDevice = (int)NULL;
 	mContext = NULL;
 	mStream = NULL;
 	mPool = nullptr;
@@ -2801,7 +2801,7 @@ slong VolumeGVDB::ActivateSpace ( Vector3DF min, Vector3DF max )
 	// TODO: use parallized allocaution via gpu //maybe reduce the area a little?0
 	int N = mPool->getNumLevels ();
 	Extents e = ComputeExtents ( N, min, max );			// start - level N
-	ActivateRegion ( N-1, e );									// activate - level N-1
+	slong result = ActivateRegion ( N-1, e );									// activate - level N-1
 	for (float x = std::max(min.x - mVDBInfo.brick_res, 0.0f); x <= max.x+mVDBInfo.brick_res; x+= mVDBInfo.brick_res-1) {
 		for (float y = std::max(min.y - mVDBInfo.brick_res, 0.0f); y <= max.y+mVDBInfo.brick_res; y+= mVDBInfo.brick_res-1) {
 			for (float z = std::max(min.z - mVDBInfo.brick_res, 0.0f); z <= max.z+mVDBInfo.brick_res; z+= mVDBInfo.brick_res-1) {
@@ -2809,6 +2809,7 @@ slong VolumeGVDB::ActivateSpace ( Vector3DF min, Vector3DF max )
 			}
 		}
 	}
+	return result;
 }
 
 // Activate region of space at 3D position down to a given level
