@@ -331,6 +331,8 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_MAPPING_UPDATE_PC,	"gvdbUpdateMapPC",				MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );	
 	LoadFunction ( FUNC_MAPPING_UPDATE_RAY,	"gvdbUpdateMapRaycast",			MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_UPDATE_VOX,	"gvdbUpdateMapVoxelCpy",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
+	LoadFunction ( FUNC_MAPPING_UPDATE_REG,	"gvdbUpdateMapRegion",			MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
+	LoadFunction ( FUNC_MAPPING_UPDATE_VREG,"gvdbUpdateMapVoxRegion",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 
 	
 
@@ -4593,35 +4595,6 @@ void VolumeGVDB::Compute (int effect, uchar channel, int num_iterations, Vector3
 	PERF_POP();
 }
 
-// TODO only update the voxels in a region
-void VolumeGVDB::ComputeRegion (int effect, uchar channel, int num_iterations, Vector3DF parameters, Vector3DF regionMin, Vector3DF regionDim, bool bUpdateApron, bool skipOverAprons, float boundval)
-{ 
-	PERF_PUSH ("Compute");
-
-	// Send VDB Info	
-	PrepareVDB ();
-	
-	PUSH_CTX
-
-	// Determine grid and block dims (must match atlas bricks)	
-	Vector3DI block ( 8, 8, 8 );
-	Vector3DI atlasRes = mPool->getAtlasRes(channel);
-	Vector3DI threadCount = (skipOverAprons ? mPool->getAtlasPackres(channel) : atlasRes);
-	Vector3DI grid = (threadCount + block - 1) / block;
-
-	void* args[6] = { &cuVDBInfo, &atlasRes, &channel, &parameters.x, &parameters.y, &parameters.z };
-	
-	for (int n=0; n < num_iterations; n++ ) {
-		cudaCheck ( cuLaunchKernel ( cuFunc[effect], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, mStream, args, NULL ),
-						"VolumeGVDB", "Compute", "cuLaunch", "", mbDebug);
-			
-		if (bUpdateApron) UpdateApron(channel, boundval); // update the apron
-	}
-	POP_CTX
-		
-	PERF_POP();
-}
-
 void VolumeGVDB::DownsampleCPU(Matrix4F xform, Vector3DI in_res, char in_aux, Vector3DI out_res, Vector3DF out_max, char out_aux, Vector3DF inr, Vector3DF outr)
 {
 	PUSH_CTX
@@ -5281,6 +5254,40 @@ void VolumeGVDB::MapExtraGVDB (int subcell_size)
 	POP_CTX
 }
 
+void VolumeGVDB::InsertScanRays(FrameInfo& frame, Vector3DF& s, Vector3DF& u, Vector3DF& v) {
+	Vector3DF viewFrustrum[] = {
+		frame.pos,
+		frame.pos + s,
+		frame.pos + s + u,
+		frame.pos + s + v,
+		frame.pos + s + u + v
+	};
+	Vector3DF minRegion;
+	minRegion.x = std::max(floor(std::min(std::min(std::min(viewFrustrum[0].x, viewFrustrum[1].x), viewFrustrum[2].x), std::min(viewFrustrum[3].x, viewFrustrum[4].x))), 0.0f);
+	minRegion.y = std::max(floor(std::min(std::min(std::min(viewFrustrum[0].y, viewFrustrum[1].y), viewFrustrum[2].y), std::min(viewFrustrum[3].y, viewFrustrum[4].y))), 0.0f);
+	minRegion.z = std::max(floor(std::min(std::min(std::min(viewFrustrum[0].z, viewFrustrum[1].z), viewFrustrum[2].z), std::min(viewFrustrum[3].z, viewFrustrum[4].z))), 0.0f);
+	Vector3DF maxRegion;
+	maxRegion.x = std::max(ceil(std::max(std::max(std::max(viewFrustrum[0].x, viewFrustrum[1].x), viewFrustrum[2].x), std::max(viewFrustrum[3].x, viewFrustrum[4].x))), 0.0f);
+	maxRegion.y = std::max(ceil(std::max(std::max(std::max(viewFrustrum[0].y, viewFrustrum[1].y), viewFrustrum[2].y), std::max(viewFrustrum[3].y, viewFrustrum[4].y))), 0.0f);
+	maxRegion.z = std::max(ceil(std::max(std::max(std::max(viewFrustrum[0].z, viewFrustrum[1].z), viewFrustrum[2].z), std::max(viewFrustrum[3].z, viewFrustrum[4].z))), 0.0f);
+	Vector3DI dimensionsRegion = maxRegion - minRegion;
+	int sizeRegion = abs(dimensionsRegion.x * dimensionsRegion.y * dimensionsRegion.z);
+
+	Vector3DI block(8, 8 ,8);
+	Vector3DI grid(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
+	Vector3DI atlasRes = mPool->getAtlasRes(0);
+	Vector3DI min = minRegion;
+
+	void* args1[5] = {  
+		&cuVDBInfo, &sizeRegion, &atlasRes, &min, &dimensionsRegion
+	};
+
+	PUSH_CTX
+		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_UPDATE_VREG], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
+					"VolumeGVDB", "GatherLevelSet", "cuLaunch", "FUNC_MAPPING_UPDATE_VREG", mbDebug);			
+	POP_CTX
+}
+
 void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	DataPtr	voxels;
 	DataPtr	voxelsClr;
@@ -5321,13 +5328,25 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_RAY], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
 
-	Vector3DF test(0,0,0);
-	Compute(FUNC_MAPPING_UPDATE_VOX, 0, 1, test, false, false);
+
+	block = Vector3DI(8, 8 ,8);
+	grid = Vector3DI(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
+	Vector3DI atlasRes = mPool->getAtlasRes(0);
+
+	void* args1[3] = 
+	{  
+		&cuVDBInfo, &sizeRegion, &atlasRes
+	};
+
+	PUSH_CTX
+		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_UPDATE_REG], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
+					"VolumeGVDB", "GatherLevelSet", "cuLaunch", "FUNC_MAPPING_UPDATE_REG", mbDebug);			
+	POP_CTX
+
 	
-	/*Vector3DI block ( 16, 16, 1 );
-	Vector3DI grid ( int(m_scanres.x/block.x)+1, int(m_scanres.y/block.y)+1, 1 );
-	cudaCheck( cuLaunchKernel( m_Func, grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
-		"PointFusion", "ScanBuildings", "cuLaunch", "scanBuildings", true );*/ 
+	
+	/*Vector3DF test(0,0,0);
+	Compute(FUNC_MAPPING_UPDATE_VOX, 0, 1, test, false, false);*/
 
 	// update map with values of voxels
 	

@@ -720,9 +720,12 @@ void Sample::updateMap() {
 
 	//cudaCheck ( cuMemcpyHtoD ( m_cuFrameInfo, &m_FrameInfo, sizeof(FrameInfo)), "PointFusion", "gvdbUpdateMap", "cuMemcpyHtoD", "m_FrameInfo", true );
 	gvdb.setFrameInformation(m_FrameInfo);
-	Vector3DF test;
+	
+	/*Vector3DF test;
 	test.Set(0,0,0);	
-	gvdb.Compute(FUNC_MAPPING_UPDATE, 0, 1, test, false, false);
+	gvdb.Compute(FUNC_MAPPING_UPDATE, 0, 1, test, false, false);*/
+	gvdb.InsertScanRays(m_FrameInfo, s, u, v);
+
 	gvdb.UpdateApron(0, 0.0f);
 	gvdb.UpdateApron(1, 0.0f);
 	PERF_POP();

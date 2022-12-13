@@ -236,6 +236,127 @@ extern "C" __global__ void gvdbUpdateMap ( VDBInfo* gvdb, int3 atlasRes, uchar c
 }
 
 
+extern "C" __global__ void gvdbUpdateMapVoxRegion ( VDBInfo* gvdb, int numPnts, int3 atlasRes, int3 minRegion, int3 dimRegion )
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int z = blockIdx.z * blockDim.z + threadIdx.z;
+	if (x >= dimRegion.x || y >= dimRegion.y || z >= dimRegion.z) return;
+
+	float3 wpos = make_float3(x + minRegion.x, y + minRegion.y, z + minRegion.z);
+	float3 offs, vmin; uint64 nid;
+	VDBNode* node = getNodeAtPoint ( gvdb, wpos, &offs, &vmin, &nid );				// find vdb node at point
+	//printf("%d, %d, %d\n", minRegion.x, minRegion.y, minRegion.z);
+	if (node == 0x0) return;
+	float3 atlasIdx = offs + wpos - vmin;
+	if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.x || atlasIdx.z >= atlasRes.x) return;
+
+	/*
+	 * Check if voxel is in range bounds
+	 */
+	float3 relPos = wpos - frame.pos;
+	float3 koef[8];
+	koef[0].x = dot(frame.cams, relPos);
+	koef[0].y = dot(frame.camu, relPos);
+	koef[0].z = dot(frame.camv, relPos);
+
+	relPos.x++;
+	koef[1].x = dot(frame.cams, relPos);
+	koef[1].y = dot(frame.camu, relPos);
+	koef[1].z = dot(frame.camv, relPos);
+
+	relPos.y++;;
+	koef[2].x = dot(frame.cams, relPos);
+	koef[2].y = dot(frame.camu, relPos);
+	koef[2].z = dot(frame.camv, relPos);
+
+	relPos.z++;
+	koef[3].x = dot(frame.cams, relPos);
+	koef[3].y = dot(frame.camu, relPos);
+	koef[3].z = dot(frame.camv, relPos);
+
+	relPos.y--;
+	koef[4].x = dot(frame.cams, relPos);
+	koef[4].y = dot(frame.camu, relPos);
+	koef[4].z = dot(frame.camv, relPos);
+
+	relPos.x--;
+	koef[5].x = dot(frame.cams, relPos);
+	koef[5].y = dot(frame.camu, relPos);
+	koef[5].z = dot(frame.camv, relPos);
+
+	relPos.y++;
+	koef[6].x = dot(frame.cams, relPos);
+	koef[6].y = dot(frame.camu, relPos);
+	koef[6].z = dot(frame.camv, relPos);
+
+	relPos.z--;
+	koef[7].x = dot(frame.cams, relPos);
+	koef[7].y = dot(frame.camu, relPos);
+	koef[7].z = dot(frame.camv, relPos);
+
+	relPos.y--;
+
+	if (!inFrustrum(koef[0]) && !inFrustrum(koef[1]) && !inFrustrum(koef[2]) && !inFrustrum(koef[3]) &&
+		!inFrustrum(koef[4]) && !inFrustrum(koef[5]) && !inFrustrum(koef[6]) && !inFrustrum(koef[7])) return;
+
+	float3 minK = minValue(koef);
+	float3 maxK = maxValue(koef);
+
+	minK.y = floor(minK.y * (float) frame.res.x);
+	minK.z = floor(minK.z * (float) frame.res.y);
+	maxK.y = ceil(maxK.y * (float) frame.res.x);
+	maxK.z = ceil(maxK.z * (float) frame.res.y);
+
+	int hitCount = 0;
+	int freeCount = 0;
+	float4 avgClr = make_float4(0,0,0,0);
+	for (int x = minK.y; x < maxK.y; x++) {
+		for (int y = minK.z; y < maxK.z; y++) {
+			int i = y*frame.res.x + x;
+			// is a measurment inside?
+
+			if (!(frame.pntList[i].x == 0 && frame.pntList[i].y == 0 && frame.pntList[i].z == 0)) {
+				if (frame.pntList[i].x >= wpos.x && frame.pntList[i].x < wpos.x+1 &&
+						frame.pntList[i].y >= wpos.y && frame.pntList[i].y < wpos.y+1 &&
+						frame.pntList[i].z >= wpos.z && frame.pntList[i].z < wpos.z+1) {
+					hitCount++;
+					uchar4 clr = ((uchar4 *)frame.pntClrs)[i];
+					avgClr += make_float4(clr.x, clr.y, clr.z, clr.w);
+				} else if (hitCount == 0 && intersection(wpos, frame.pos, frame.pntList[i] - frame.pos)) {
+					freeCount++;
+				}
+			} else {
+				/* TODO: When no point could be measured the area from the measurment to maximum range is probably free*/
+				// -> check if voxel intersects ray from camera to pixel at maximum distance
+				freeCount++;
+			}
+		}
+	}
+	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	if (hitCount > 0) {
+		uchar4 clr = surf3Dread<uchar4>(gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+		avgClr += make_float4(clr.x, clr.y, clr.z, clr.w);
+		hitCount++;
+		clr = make_uchar4(avgClr.x / hitCount, avgClr.y / hitCount, avgClr.z / hitCount, avgClr.w / hitCount);
+		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+
+		float prob = min(v + hitCount, frame.maxProb);
+		surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+		return;
+	}
+	if (freeCount > 0) {
+		/*uchar4 clr = make_uchar4(125, 125, 125, 255);
+		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);*/
+
+		// TODO:-> give a free/occupied prob update value to the function
+		float prob = max(v - freeCount/100, frame.minProb);//6;//max(v - hitCount, frame.minProb); 
+		surf3Dwrite( prob, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+		return;
+	}
+	return;
+}
+
 // Follow the implementation of insert point (identify voxels that need to be updated) -> check how the range is tested
 // then perform the insetion
 
@@ -325,19 +446,7 @@ extern "C" __global__ void gvdbUpdateMapVoxelCpy ( VDBInfo* gvdb, int3 atlasRes,
 
 	if ( !getAtlasToWorld ( gvdb, atlasIdx, wpos )) return;
 	wpos -= make_float3(0.5, 0.5, 0.5);
-	/*for (unsigned int x = 0; x < rayInfo.res.x; x++) {
-		for (unsigned int y = 0; y < rayInfo.res.y; y++) {
-			float3 point = rayInfo.pntList[ y * rayInfo.res.x +x];
-			if (point.x >= wpos.x && point.x < wpos.x+1 &&
-					point.y >= wpos.y && point.y < wpos.y+1 &&
-					point.z >= wpos.z && point.z < wpos.z+1) {
-				float v = 10;
-				surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
-				uchar4 clr = make_uchar4(255, 125, 125, 255);
-				surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
-			}
-		}
-	}*/
+	
 	// is in region
 	if (wpos.x < rayInfo.voxelCpyOffset.x || wpos.x >= rayInfo.voxelCpyOffset.x + rayInfo.voxelCpyDim.x || 
 		wpos.y < rayInfo.voxelCpyOffset.y || wpos.y >= rayInfo.voxelCpyOffset.y + rayInfo.voxelCpyDim.y || 
@@ -354,6 +463,41 @@ extern "C" __global__ void gvdbUpdateMapVoxelCpy ( VDBInfo* gvdb, int3 atlasRes,
 
 	if ( update > 0.0f) {
 		float3 newColor = rayInfo.voxelCpyClr[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z];
+
+		uchar4 oldClr = surf3Dread<uchar4>(gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+		newColor.x += (float) oldClr.x;
+		newColor.y += (float) oldClr.y;
+		newColor.z += (float) oldClr.z;
+		newColor /= (update+ 1.0f);
+		uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 255);
+		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+		return;
+	}
+}
+
+extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int3 atlasRes )
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int z = blockIdx.z * blockDim.z + threadIdx.z;
+	if (x >= rayInfo.voxelCpyDim.x || y >= rayInfo.voxelCpyDim.y || z >= rayInfo.voxelCpyDim.z) return;
+
+	float3 wpos = make_float3(x + rayInfo.voxelCpyOffset.x, y + rayInfo.voxelCpyOffset.y, z + rayInfo.voxelCpyOffset.z);
+	float3 offs, vmin; uint64 nid;
+	VDBNode* node = getNodeAtPoint ( gvdb, wpos, &offs, &vmin, &nid );				// find vdb node at point
+	if (node == 0x0) return;
+	float3 atlasIdx = offs + wpos - vmin;
+	if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.x || atlasIdx.z >= atlasRes.x) return;
+
+	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	float update = rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
+	v += update;
+	v = min(max(v, -20.0), 200000.0);
+	surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	
+
+	if ( update > 0.0f) {
+		float3 newColor = rayInfo.voxelCpyClr[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
 
 		uchar4 oldClr = surf3Dread<uchar4>(gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
 		newColor.x += (float) oldClr.x;
