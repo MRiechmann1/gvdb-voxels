@@ -261,6 +261,7 @@ sjtime TimeX::GetSystemNSec ()
 	#else
 		printf ( "ERROR: GetSystemNSec not implemented. QueryPerformanceCounter not available.\n" );
 	#endif	
+	return 0;
 }
 
 void TimeX::SetTimeNSec ()
@@ -624,7 +625,7 @@ std::string TimeX::GetReadableTime ()
 std::string TimeX::GetReadableSJT ()
 {
 	char buf[200];	
-	sprintf ( buf, "%I64d", m_CurrTime );
+	sprintf ( buf, "%lld", m_CurrTime );
 	return std::string ( buf );
 }
 
