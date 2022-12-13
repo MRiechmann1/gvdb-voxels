@@ -200,7 +200,7 @@ void OptixScene::ClearGraph ()
 
 	if ( m_OptixMats.size() > 0 ) m_OptixMats.clear ();	
 
-	CreateEnvmap ( "" );
+	CreateEnvmap ( ((char *)"" );
 }
 
 // AddMaterial
