@@ -1053,7 +1053,7 @@ void StartCuda ( int devsel, CUcontext ctxsel, CUdevice& dev, CUcontext& ctx, CU
 	cuDeviceGetCount ( &cnt );
 	if (cnt == 0) {
 		gprintf("ERROR: No CUDA devices found.\n");
-		dev = NULL; ctx = NULL;
+		dev = (int)NULL; ctx = NULL;
 		gerror();
 		return;
 	}	
