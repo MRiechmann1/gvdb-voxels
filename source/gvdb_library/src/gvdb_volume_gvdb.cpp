@@ -3158,12 +3158,12 @@ void VolumeGVDB::writeCube (  FILE* fp, unsigned char vpix[], slong& numfaces, i
 	v[6] = vbase + vgToVert[ gv[6] ];
 	v[7] = vbase + vgToVert[ gv[7] ];
 
-	if ( vpix[1] == 0 ) {fprintf(fp, "f %lld//0 %lld//0 %lld//0 %lld//0\n", v[1], v[2], v[6], v[5] );  numfaces++; }	// x+	
-	if ( vpix[2] == 0 ) {fprintf(fp, "f %lld//1 %lld//1 %lld//1 %lld//1\n", v[0], v[3], v[7], v[4] );  numfaces++; }	// x-
-	if ( vpix[3] == 0 ) {fprintf(fp, "f %lld//2 %lld//2 %lld//2 %lld//2\n", v[2], v[3], v[7], v[6] );  numfaces++; }	// y+
-	if ( vpix[4] == 0 ) {fprintf(fp, "f %lld//3 %lld//3 %lld//3 %lld//3\n", v[1], v[0], v[4], v[5] );  numfaces++; }	// y- 
-	if ( vpix[5] == 0 ) {fprintf(fp, "f %lld//4 %lld//4 %lld//4 %lld//4\n", v[4], v[5], v[6], v[7] );  numfaces++; }	// z+
-	if ( vpix[6] == 0 ) {fprintf(fp, "f %lld//5 %lld//5 %lld//5 %lld//5\n", v[0], v[1], v[2], v[3] );  numfaces++; }	// z-	
+	if ( vpix[1] == 0 ) {fprintf(fp, "f %ld//0 %ld//0 %ld//0 %ld//0\n", v[1], v[2], v[6], v[5] );  numfaces++; }	// x+	
+	if ( vpix[2] == 0 ) {fprintf(fp, "f %ld//1 %ld//1 %ld//1 %ld//1\n", v[0], v[3], v[7], v[4] );  numfaces++; }	// x-
+	if ( vpix[3] == 0 ) {fprintf(fp, "f %ld//2 %ld//2 %ld//2 %ld//2\n", v[2], v[3], v[7], v[6] );  numfaces++; }	// y+
+	if ( vpix[4] == 0 ) {fprintf(fp, "f %ld//3 %ld//3 %ld//3 %ld//3\n", v[1], v[0], v[4], v[5] );  numfaces++; }	// y- 
+	if ( vpix[5] == 0 ) {fprintf(fp, "f %ld//4 %ld//4 %ld//4 %ld//4\n", v[4], v[5], v[6], v[7] );  numfaces++; }	// z+
+	if ( vpix[6] == 0 ) {fprintf(fp, "f %ld//5 %ld//5 %ld//5 %ld//5\n", v[0], v[1], v[2], v[3] );  numfaces++; }	// z-	
 }
 
 void VolumeGVDB::enableVerts ( int*& vgToVert, std::vector<Vector3DF>& verts, Vector3DF vm, int gv[] )
