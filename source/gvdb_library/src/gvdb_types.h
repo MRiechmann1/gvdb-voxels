@@ -134,7 +134,7 @@
 	#define  LOGLEVEL_OK 7
 	#define  LOGI(...)  { gprintfLevel(0, __VA_ARGS__); }
 	#define  LOGW(...)  { gprintfLevel(1, __VA_ARGS__); }
-	#define  LOGE(...)  { gprintfLevel(2, __FILE__"("S__LINE__"): "__VA_ARGS__); }
+	#define  LOGE(...)  { gprintfLevel(2, __FILE__ "(" S__LINE__ "): "__VA_ARGS__); }
 	#define  LOGOK(...)  { gprintfLevel(7, __VA_ARGS__); }
 
 #endif
