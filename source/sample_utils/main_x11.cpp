@@ -31,6 +31,7 @@
 #include<stdarg.h>
 #include<unistd.h>
 #include<chrono>
+#include "string_helper.h"
 
 Display *g_dpy = 0;
 

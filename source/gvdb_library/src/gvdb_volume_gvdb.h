@@ -363,7 +363,7 @@
 			void SetProfile ( bool bCPU, bool bGPU ) ;
 			void SetDebug(bool dbg);
 			void LoadFunction ( int fid, std::string func, int mid, std::string ptx );
-			void StartRasterGL ();
+			void StartRasterGL (std::string dir = "");
 			void SetModule ();
 			void SetModule ( CUmodule module );			
 			void SetEpsilon(float eps, int maxiter) { mEpsilon = eps; mMaxIter = maxiter; mVDBInfo.update = true; }			
@@ -728,10 +728,10 @@
 			inline uint64 numBitsOn(byte v)
 			{
 				static const byte numBits[256] = {
-					#define B2(n)  n,     n+1,     n+1,     n+2
-					#define B4(n)  B2(n), B2(n+1), B2(n+1), B2(n+2)
-					#define B6(n)  B4(n), B4(n+1), B4(n+1), B4(n+2)
-					B6(0), B6(1), B6(1),   B6(2)
+					#define Bit2(n)  n,     n+1,     n+1,     n+2
+					#define Bit4(n)  Bit2(n), Bit2(n+1), Bit2(n+1), Bit2(n+2)
+					#define Bit6(n)  Bit4(n), Bit4(n+1), Bit4(n+1), Bit4(n+2)
+					Bit6(0), Bit6(1), Bit6(1),   Bit6(2)
 				};
 				return numBits[v];
 			}

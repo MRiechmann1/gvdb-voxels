@@ -3222,12 +3222,12 @@ void VolumeGVDB::ValidateOpenGL ()
 // Start Raster GL
 // - Enable the GL rasterization pipeline. 
 // - Load GLSL shaders
-void VolumeGVDB::StartRasterGL ()
+void VolumeGVDB::StartRasterGL (std::string dir)
 {
 	#ifdef BUILD_OPENGL
 		ValidateOpenGL ();
-		makeSimpleShaderGL (mScene, "simple.vert.glsl", "simple.frag.glsl");
-		makeVoxelizeShader  ( mScene, "voxelize.vert.glsl", "voxelize.frag.glsl", "voxelize.geom.glsl" );
+		makeSimpleShaderGL (mScene, (dir + std::string("simple.vert.glsl")).c_str(), (dir + std::string("simple.frag.glsl")).c_str());
+		makeVoxelizeShader  ( mScene,  (dir + std::string("voxelize.vert.glsl")).c_str(),  (dir + std::string("voxelize.frag.glsl")).c_str(),  (dir + std::string("voxelize.geom.glsl")).c_str() );
 	#endif
 }
 

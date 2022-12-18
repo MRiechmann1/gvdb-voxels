@@ -379,6 +379,6 @@
 	void nverror();
 	
 	bool getFileLocation ( const char* filename, char* outpath );
-	bool getFileLocation ( const char* filename, char* outpath, std::vector<std::string> paths );
+	//bool getFileLocation ( const char* filename, char* outpath, std::vector<std::string> paths );
 
 #endif
