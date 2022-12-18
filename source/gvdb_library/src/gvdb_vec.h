@@ -277,8 +277,8 @@ namespace nvdb {
 
 	// Explicit template instantiations and short names.
 	// See https://anteru.net/blog/2008/c-tricks-6-explicit-template-instantiation/
-	template class GVDB_API Vector3D<int>;
-	template class GVDB_API Vector3D<float>;
+	//template class GVDB_API Vector3D<int>;
+	//template class GVDB_API Vector3D<float>;
 	using Vector3DI = Vector3D<int>;
 	using Vector3DF = Vector3D<float>;
 

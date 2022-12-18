@@ -115,7 +115,7 @@ inline __device__ int getChild ( VDBNode* node, int b )
 inline __device__ int getChild ( VDBInfo* gvdb, VDBNode* node, int b )
 {	
 	uint64 listid = node->mChildList;
-	if (listid == ID_UNDEFL) return ID_UNDEF64;
+	if (listid == ID_UNDEFL) return ID_UNDEFL;
 	uchar clev = uchar( (listid >> 8) & 0xFF );
 	int cndx = listid >> 16;
 	uint64* clist = (uint64*) (gvdb->childlist[clev] + cndx*gvdb->childwid[clev]);
