@@ -290,10 +290,19 @@ target_sources(gvdb PRIVATE ${GLEW_SOURCE})
 target_include_directories(gvdb PRIVATE ${GLEW_INCLUDE_DIR})
 
 # Allow GVDB to use e.g. CUDA_GVDB_COPYDATA as a macro for "cuda_gvdb_copydata.ptx"
+if ("$ENV{PTX_RELATIVE_DIR}" STREQUAL "")
+    message(WARNING "PTX_RELATIVE_DIR not Sset: $ENV{PTX_RELATIVE_DIR}")
+    set(PTX_RELATIVE_DIR "")
+else()
+    set(PTX_RELATIVE_DIR "$ENV{PTX_RELATIVE_DIR}")
+endif()
+message(WARNING "PTX_RELATIVE_DIR : ${PTX_RELATIVE_DIR}")
+
 foreach(_FILE ${GVDB_PTX_SOURCE_FILES})
 	get_filename_component(_FILE ${_FILE} NAME) # cuda_gvdb_copydata.cu
 	string(REPLACE ".cu" ".ptx" _FILE ${_FILE}) # cuda_gvdb_copydata.ptx
 	string(REPLACE "." "_" _MACRO ${_FILE})     # cuda_gvdb_copydata_ptx
+    string(CONCAT _FILE ${PTX_RELATIVE_DIR} ${_FILE})
 	string(TOUPPER ${_MACRO} _MACRO) # Yep, this goes input, then output!
 	target_compile_definitions(gvdb PUBLIC
 		${_MACRO}="${_FILE}")
