@@ -348,6 +348,7 @@
 		Vector3DI		voxelCpyOffset;
 		Vector3DI  		voxelCpyDim;
 		CUdeviceptr  	voxelCpyClr;
+		float 			voxel_size;
 	};
 
 	

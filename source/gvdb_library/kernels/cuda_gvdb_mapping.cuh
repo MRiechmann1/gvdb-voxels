@@ -373,6 +373,7 @@ struct ALIGN(16) RaycastUpdate {
 	int3		voxelCpyOffset;
 	int3  		voxelCpyDim;
 	float3*  	voxelCpyClr;
+	float 		voxel_size;
 };
 __device__ RaycastUpdate		rayInfo;
 
@@ -386,7 +387,7 @@ extern "C" __global__ void gvdbUpdateMapPC ( int3 res )
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if ( x >= res.x || y >= res.y ) return;
 
-	float3 point = rayInfo.pntList[ y * res.x +x];
+	float3 point = rayInfo.pntList[ y * res.x +x] * rayInfo.voxel_size;
 	if (point.x == 0.0f && point.y == 0.0f && point.z == 0.0f) return;
 
 	int3 vox = make_int3(point);
@@ -408,7 +409,7 @@ extern "C" __global__ void gvdbUpdateMapRaycast ( int3 res )
 	if ( x >= res.x || y >= res.y ) return;
 
 	//float3 jit = jitter_sample();
-	float3 point = rayInfo.pntList[ y * res.x +x];
+	float3 point = rayInfo.pntList[ y * res.x +x] * rayInfo.voxel_size;
 	if (point.x == 0 && point.y == 0 && point.z == 0) return;
 
 
