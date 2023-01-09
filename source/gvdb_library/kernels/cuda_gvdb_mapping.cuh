@@ -397,9 +397,9 @@ extern "C" __global__ void gvdbUpdateMapPC ( int3 res )
 
 	float *clrAddr = (float *)&rayInfo.voxelCpyClr[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z];
 	uchar4 clr = ((uchar4 *)rayInfo.pntClrs)[ y * res.x +x];
-	atomicAdd(clrAddr, (float)clr.x * 1.0f);
+	atomicAdd(clrAddr, (float)clr.z * 1.0f);
 	atomicAdd(clrAddr+1, (float)clr.y * 1.0f);
-	atomicAdd(clrAddr+2, (float)clr.z * 1.0f);
+	atomicAdd(clrAddr+2, (float)clr.x * 1.0f);
 }
 
 extern "C" __global__ void gvdbUpdateMapRaycast ( int3 res )
@@ -488,25 +488,24 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	float3 atlasIdx = offs + wpos - vmin;
 	if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.x || atlasIdx.z >= atlasRes.x) return;
 
-	/*float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	float update = rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
 	v += update;
 	v = min(max(v, -20.0), 200000.0);
 	surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	
 
-	if ( update > 0.0f) {
-		float3 newColor = rayInfo.voxelCpyClr[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
+	if ( update <= 0.0f) return;
+	float3 newColor = rayInfo.voxelCpyClr[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
 
-		uchar4 oldClr = surf3Dread<uchar4>(gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
-		newColor.x += (float) oldClr.x;
-		newColor.y += (float) oldClr.y;
-		newColor.z += (float) oldClr.z;
-		newColor /= (update+ 1.0f);
-		uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 255);
-		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
-		return;
-	}*/
+	uchar4 oldClr = surf3Dread<uchar4>(gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+	newColor.x += (float) oldClr.x;
+	newColor.y += (float) oldClr.y;
+	newColor.z += (float) oldClr.z;
+	newColor /= (update+ 1.0f);
+	uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 255);
+	surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+	return;
 }
 
 /*	
