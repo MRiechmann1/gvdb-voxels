@@ -96,6 +96,7 @@ using namespace nvdb;
 		void setOrbit  ( float ax, float ay, float az, Vector3DF tp, float dist, float dolly );
 		void setOrbit  ( Vector3DF angs, Vector3DF tp, float dist, float dolly );
 		void setAngles ( float ax, float ay, float az );
+		void setAxis ( Vector3DF ax, Vector3DF ay, Vector3DF az );
 		void moveOrbit ( float ax, float ay, float az, float dist );		
 		void moveToPos ( float tx, float ty, float tz );		
 		void moveRelative ( float dx, float dy, float dz );
@@ -138,6 +139,10 @@ using namespace nvdb;
 		float getDu ();
 		float getDv ();
 
+		Vector3DF		axisX;
+		Vector3DF		axisY;
+		Vector3DF		axisZ;
+
 
 	public:
 		eProjection		mProjType;								// Projection type
@@ -174,6 +179,7 @@ using namespace nvdb;
 		Vector4DF		blRayWorld;
 		Vector4DF		brRayWorld;
 		Vector3DI 		res;
+		bool useAxis;
 	};
 
 	}

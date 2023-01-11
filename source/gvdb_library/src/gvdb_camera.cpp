@@ -46,6 +46,7 @@ Camera3D::Camera3D ()
 	mNear = (float) 0.1;
 	mFar = (float) 5000.0;
 	mTile.Set ( 0, 0, 1, 1 );
+	useAxis = false;
 
 	for (int n=0; n < 8; n++ ) mOps[n] = false;	
 	mOps[0] = false;
@@ -101,6 +102,7 @@ void Camera3D::setOrbit ( float ax, float ay, float az, Vector3DF tp, float dist
 	from_pos.z = tp.z + (float) dz * mOrbitDist;
 	to_pos = tp;
 	orbit_set_ = true;
+	useAxis = false;
 	updateMatricies ();
 }
 
@@ -157,6 +159,13 @@ void Camera3D::setAngles ( float ax, float ay, float az )
 	updateMatricies ();
 }
 
+void Camera3D::setAxis ( Vector3DF ax, Vector3DF ay, Vector3DF az ) {
+	axisZ = az;
+	axisY = ay;
+	axisX = ax;
+
+	useAxis = true;
+}
 
 void Camera3D::moveRelative ( float dx, float dy, float dz )
 {
@@ -174,22 +183,39 @@ void Camera3D::setProjection (eProjection proj_type)
 
 void Camera3D::updateMatricies ()
 {
+	std::cout <<  "update matrices" << std::endl;
 	// THIS NEEDS TO HANDLE THE CASE WHEN THE OBJECT HAS ONLY BEEN CALLED BY setMatrices
 	Matrix4F basis;
 	Vector3DF temp;	
 	
 	if (orbit_set_) {
 		// compute camera direction vectors	--- MATCHES OpenGL's gluLookAt function (DO NOT MODIFY)
-		dir_vec = to_pos;					// f vector in gluLookAt docs						
-		dir_vec -= from_pos;				// eye = from_pos in gluLookAt docs
-		dir_vec.Normalize();
-		side_vec = dir_vec;
-		side_vec.Cross(up_dir);
-		side_vec.Normalize();
-		up_vec = side_vec;
-		up_vec.Cross(dir_vec);
-		up_vec.Normalize();
-		dir_vec *= -1;
+		if(useAxis) {
+			dir_vec = axisZ;					// f vector in gluLookAt docs						
+			dir_vec.Normalize();
+			side_vec = axisX;
+			side_vec.Normalize();
+			up_vec = axisY;
+			up_vec.Normalize();
+
+			to_pos = from_pos + (dir_vec * -mOrbitDist);
+		} else {
+			dir_vec = to_pos;					// f vector in gluLookAt docs						
+			dir_vec -= from_pos;				// eye = from_pos in gluLookAt docs
+			dir_vec.Normalize();
+			side_vec = dir_vec;
+			side_vec.Cross(up_dir);
+			side_vec.Normalize();
+			up_vec = side_vec;
+			up_vec.Cross(dir_vec);
+			up_vec.Normalize();
+			dir_vec *= -1;
+
+			axisZ = dir_vec;
+			axisY = up_vec;
+			axisX = side_vec;
+		}
+
 
 		// construct view matrix
 		rotate_matrix.Basis(side_vec, up_vec, dir_vec);
