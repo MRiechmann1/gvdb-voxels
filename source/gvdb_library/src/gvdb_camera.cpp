@@ -183,7 +183,6 @@ void Camera3D::setProjection (eProjection proj_type)
 
 void Camera3D::updateMatricies ()
 {
-	std::cout <<  "update matrices" << std::endl;
 	// THIS NEEDS TO HANDLE THE CASE WHEN THE OBJECT HAS ONLY BEEN CALLED BY setMatrices
 	Matrix4F basis;
 	Vector3DF temp;	

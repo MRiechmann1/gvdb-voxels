@@ -333,6 +333,7 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_MAPPING_UPDATE_VOX,	"gvdbUpdateMapVoxelCpy",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_UPDATE_REG,	"gvdbUpdateMapRegion",			MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_UPDATE_VREG,"gvdbUpdateMapVoxRegion",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
+	LoadFunction ( FUNC_MAPPING_FILL_0,		"gvdbFillZero",					MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 
 	
 
@@ -2799,16 +2800,26 @@ slong VolumeGVDB::ActivateSpace ( Vector3DF pos )
 slong VolumeGVDB::ActivateSpace ( Vector3DF min, Vector3DF max )
 {	
 	// TODO: use parallized allocaution via gpu //maybe reduce the area a little?0
+	min.x -= mVDBInfo.brick_res;
+	min.y -= mVDBInfo.brick_res;
+	min.z -= mVDBInfo.brick_res;
+	max.x += mVDBInfo.brick_res;
+	max.y += mVDBInfo.brick_res;
+	max.z += mVDBInfo.brick_res;
+	slong result;
 	int N = mPool->getNumLevels ();
-	Extents e = ComputeExtents ( N, min, max );			// start - level N
-	slong result = ActivateRegion ( N-1, e );									// activate - level N-1
-	for (float x = std::max(min.x - mVDBInfo.brick_res, 0.0f); x <= max.x+mVDBInfo.brick_res; x+= mVDBInfo.brick_res-1) {
+	while (N > 0) {
+		Extents e = ComputeExtents ( N, min, max );			// start - level N
+		result = ActivateRegion ( N-1, e );	
+		N--;
+	}								// activate - level N-1
+	/*for (float x = std::max(min.x - mVDBInfo.brick_res, 0.0f); x <= max.x+mVDBInfo.brick_res; x+= mVDBInfo.brick_res-1) {
 		for (float y = std::max(min.y - mVDBInfo.brick_res, 0.0f); y <= max.y+mVDBInfo.brick_res; y+= mVDBInfo.brick_res-1) {
 			for (float z = std::max(min.z - mVDBInfo.brick_res, 0.0f); z <= max.z+mVDBInfo.brick_res; z+= mVDBInfo.brick_res-1) {
 				ActivateSpace(Vector3DF(x, y, z));
 			}
 		}
-	}
+	}*/
 	return result;
 }
 
@@ -5319,20 +5330,26 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 
 	setRaycastInformation(ray_info);
 	
-	// Perform Raycasting inside voxels
-	Vector3DI block ( 16, 16, 1 );
-	Vector3DI grid ( int(scan_res.x/block.x)+1, int(scan_res.y/block.y)+1, 1 );
-
+	// Fill with zeros
+	Vector3DI block = Vector3DI(8, 8 ,8);
+	Vector3DI grid = Vector3DI(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
+	Vector3DI atlasRes = mPool->getAtlasRes(0);
 	void* args[1] = { &scan_res };
+	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_FILL_0], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args, NULL),
+		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAPPING_FILL_0", mbDebug );
+
+	// Perform Raycasting inside voxels
+	block = Vector3DI( 16, 16, 1 );
+	grid = Vector3DI( int(scan_res.x/block.x)+1, int(scan_res.y/block.y)+1, 1 );
+
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_PC], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_PC_GVDB", mbDebug );
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_RAY], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
-
-
+	
 	block = Vector3DI(8, 8 ,8);
 	grid = Vector3DI(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
-	Vector3DI atlasRes = mPool->getAtlasRes(0);
+	//Vector3DI atlasRes = mPool->getAtlasRes(0);
 
 	void* args1[3] = 
 	{  
@@ -5341,7 +5358,7 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 
 	PUSH_CTX
 		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_UPDATE_REG], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
-					"VolumeGVDB", "GatherLevelSet", "cuLaunch", "FUNC_MAPPING_UPDATE_REG", mbDebug);			
+					"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAPPING_UPDATE_REG", mbDebug);			
 	POP_CTX
 
 	

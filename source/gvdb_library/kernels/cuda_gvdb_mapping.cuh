@@ -388,11 +388,15 @@ extern "C" __global__ void gvdbUpdateMapPC ( int3 res )
 	if ( x >= res.x || y >= res.y ) return;
 
 	float3 point = rayInfo.pntList[ y * res.x +x] * rayInfo.voxel_size;
-	if (point.x == 0.0f && point.y == 0.0f && point.z == 0.0f) return;
+	if (point.x <= 0.0f && point.y <= 0.0f && point.z <= 0.0f) return;
     
 	int3 vox = make_int3(point);
 	vox = vox - rayInfo.voxelCpyOffset;
-	if (vox.x > rayInfo.voxelCpyDim.x || vox.y > rayInfo.voxelCpyDim.y || vox.z > rayInfo.voxelCpyDim.z) return;
+	/*vox = rayInfo.voxelCpyDim;
+	vox.x--;
+	vox.y--;
+	vox.z--;*/
+	if (vox.x >= rayInfo.voxelCpyDim.x || vox.y >=rayInfo.voxelCpyDim.y || vox.z >= rayInfo.voxelCpyDim.z) return;
 	atomicAdd(&rayInfo.voxelsCpy[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z], 1.0f);
 
 	float *clrAddr = (float *)&rayInfo.voxelCpyClr[vox.x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + vox.y * rayInfo.voxelCpyDim.z + vox.z];
@@ -410,7 +414,7 @@ extern "C" __global__ void gvdbUpdateMapRaycast ( int3 res )
 
 	//float3 jit = jitter_sample();
 	float3 point = rayInfo.pntList[ y * res.x +x] * rayInfo.voxel_size;
-	if (point.x == 0 && point.y == 0 && point.z == 0) return;
+	if (point.x <= 0 && point.y <= 0 && point.z <= 0) return;
 
 
 	float3 ray = point - rayInfo.pos;
@@ -487,6 +491,7 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	if (node == 0x0) return;
 	float3 atlasIdx = offs + wpos - vmin;
 	if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.x || atlasIdx.z >= atlasRes.x) return;
+	if (atlasIdx.x < 0 || atlasIdx.y < 0 || atlasIdx.z < 0) return;
 
 	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	float update = rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
@@ -505,6 +510,24 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	newColor /= (update+ 1.0f);
 	uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 255);
 	surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+	return;
+}
+
+
+extern "C" __global__ void gvdbFillZero ( int3 res )
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int z = blockIdx.z * blockDim.z + threadIdx.z;
+	if (x >= rayInfo.voxelCpyDim.x || y >= rayInfo.voxelCpyDim.y || z >= rayInfo.voxelCpyDim.z) return;
+	/*if (rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z] > 0) {//TODO: remove
+		printf("%d, %d, %d\n", x,y,z);//TODO: remove
+	}//TODO: remove*/
+
+	if (res.x > 0) {//TODO: remove
+		rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z] = 0.0f;
+		rayInfo.voxelCpyClr[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z] = make_float3(0,0,0);
+	}//TODO: remove
 	return;
 }
 
