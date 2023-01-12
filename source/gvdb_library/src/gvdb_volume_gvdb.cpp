@@ -5309,6 +5309,9 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	maxRegion.z = std::max(ceil(std::max(std::max(std::max(viewFrustrum[0].z, viewFrustrum[1].z), viewFrustrum[2].z), std::max(viewFrustrum[3].z, viewFrustrum[4].z))), 0.0f);
 	Vector3DI dimensionsRegion = maxRegion - minRegion;
 	int sizeRegion = abs(dimensionsRegion.x * dimensionsRegion.y * dimensionsRegion.z);
+	std::cout << minRegion.x << ", " << minRegion.y << ", " << minRegion.z << std::endl;
+	std::cout << maxRegion.x << ", " << maxRegion.y << ", " << maxRegion.z << std::endl;
+	std::cout << dimensionsRegion.x << ", " << dimensionsRegion.y << ", " << dimensionsRegion.z << std::endl << std::endl;
 	
 	AllocData(voxels, sizeRegion, sizeof(float), false);
 	AllocData(voxelsClr, sizeRegion, sizeof(float3), false);
@@ -5326,8 +5329,8 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	void* args[1] = { &scan_res };
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_PC], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_PC_GVDB", mbDebug );
-	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_RAY], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
-		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
+	//cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_RAY], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
+	//	"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
 
 
 	block = Vector3DI(8, 8 ,8);
