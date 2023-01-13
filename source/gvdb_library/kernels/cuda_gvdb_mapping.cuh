@@ -489,15 +489,12 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	float3 offs, vmin; uint64 nid;
 	VDBNode* node = getNodeAtPoint ( gvdb, wpos, &offs, &vmin, &nid );				// find vdb node at point
 	if (node == 0x0) return;
-	int3 atlasIdx = make_int3(offs + wpos - vmin);
+	float3 atlasIdx = offs + wpos - vmin;
 	if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.y || atlasIdx.z >= atlasRes.z) return;
 	if (atlasIdx.x < 0 || atlasIdx.y < 0 || atlasIdx.z < 0) return;
 
 	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	float update = rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
-	if (update > 0) {
-    	printf("%d, %d, %d, %f, %f, %f\n	%d, %d, %d\n", x,y,z,wpos.x, wpos.y, wpos.z, atlasIdx.x, atlasIdx.y, atlasIdx.z);
-	}
 	v += update;
 	v = min(max(v, -20.0), 200000.0);
 	surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
