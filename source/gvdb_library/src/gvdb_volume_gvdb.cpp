@@ -334,8 +334,7 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_MAPPING_UPDATE_REG,	"gvdbUpdateMapRegion",			MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_UPDATE_VREG,"gvdbUpdateMapVoxRegion",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_FILL_0,		"gvdbFillZero",					MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
-
-	
+	LoadFunction ( FUNC_MAPPING_INSERT_VO, 	"gvdbInsertVirtualObject",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 
 	SetModule ( cuModule[MODL_PRIMARY] );	
 
@@ -351,6 +350,12 @@ void VolumeGVDB::setFrameInformation(FrameInfo &frame) {
 void VolumeGVDB::setRaycastInformation(RaycastUpdate &raycastUpdate) {
 	PUSH_CTX
 	cudaCheck ( cuMemcpyHtoD ( cuRaycastUpdate, &raycastUpdate, sizeof(RaycastUpdate)), "VolumeGVDB", "gvdbUpdateMap", "cuMemcpyHtoD", "m_ScanInfo", true );
+	POP_CTX
+}
+
+void VolumeGVDB::setVOInformation(VirtualObjectInfo &voInfo) {
+	PUSH_CTX
+	cudaCheck ( cuMemcpyHtoD ( cuVOUpdate, &voInfo, sizeof(VirtualObjectInfo)), "VolumeGVDB", "gvdbUpdateMap", "cuMemcpyHtoD", "m_ScanInfo", true );
 	POP_CTX
 }
 
@@ -373,6 +378,7 @@ void VolumeGVDB::SetModule ( CUmodule module )
 	cudaCheck ( cuModuleGetGlobal ( &cuScnInfo, &len,	module, "scn" ),	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuScnInfo", mbDebug);
 	cudaCheck ( cuModuleGetGlobal ( &cuFrameInfo, &len, module, "frame" ), 	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuFrameInfo", mbDebug );
 	cudaCheck ( cuModuleGetGlobal ( &cuRaycastUpdate, &len, module, "rayInfo" ), 	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuRaycastUpdate", mbDebug );
+	cudaCheck ( cuModuleGetGlobal ( &cuVOUpdate, &len, module, "voInfo" ), 	"VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuRaycastUpdate", mbDebug );
 
 	cudaCheck ( cuModuleGetGlobal ( &cuXform,  &len,	module, "cxform" ), "VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuXform", mbDebug);
 	cudaCheck ( cuModuleGetGlobal ( &cuDebug,  &len,	module, "cdebug" ), "VolumeGVDB", "SetModule", "cuModuleGetGlobal", "cuDebug", mbDebug);
@@ -5298,6 +5304,8 @@ void VolumeGVDB::InsertScanRays(FrameInfo& frame, Vector3DF& s, Vector3DF& u, Ve
 		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_UPDATE_VREG], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
 					"VolumeGVDB", "GatherLevelSet", "cuLaunch", "FUNC_MAPPING_UPDATE_VREG", mbDebug);			
 	POP_CTX
+	UpdateApron(0, 0.0f);
+	UpdateApron(1, 0.0f);
 }
 
 void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
@@ -5342,8 +5350,12 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	block = Vector3DI( 16, 16, 1 );
 	grid = Vector3DI( int(scan_res.x/block.x)+1, int(scan_res.y/block.y)+1, 1 );
 
+	PUSH_CTX
+	PERF_PUSH("FUNC_MAPPING_UPDATE_PC");
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_PC], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_PC_GVDB", mbDebug );
+
+	PERF_PUSH("FUNC_MAPPING_UPDATE_RAY");
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_RAY], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
 		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
 	
@@ -5356,13 +5368,11 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 		&cuVDBInfo, &sizeRegion, &atlasRes
 	};
 
-	PUSH_CTX
+	PERF_PUSH("FUNC_MAPPING_UPDATE_REG");
 		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_UPDATE_REG], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
 					"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAPPING_UPDATE_REG", mbDebug);			
 	POP_CTX
 
-	
-	
 	/*Vector3DF test(0,0,0);
 	Compute(FUNC_MAPPING_UPDATE_VOX, 0, 1, test, false, false);*/
 
@@ -5370,9 +5380,36 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	
 	FreeData(voxels);
 	FreeData(voxelsClr);
+	UpdateApron(0, 0.0f);
+	UpdateApron(1, 0.0f);
 	//gvdb.AllocData ( m_pnts, m_maxpnts, sizeof(float), true );
 }
 
+void VolumeGVDB::InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min, Vector3DF &max) {
+	PERF_PUSH("Dynamic Topology");	
+	ActivateSpace ( min, max );
+
+	FinishTopology();	// false. no commit pool	false. no compute bounds
+	UpdateAtlas();
+	PERF_POP();
+
+	Vector3DI dimensionsRegion = max - min; // dimensions seem to be 0
+	Vector3DI offset = min;
+	setVOInformation(vo_info);
+	Vector3DI block = Vector3DI(8, 8 ,8);
+	Vector3DI grid = Vector3DI(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
+	Vector3DI atlasRes = mPool->getAtlasRes(0);
+	void* args1[4] = 
+	{  
+		&cuVDBInfo, &dimensionsRegion, &offset, &atlasRes
+	};
+	PUSH_CTX
+		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_INSERT_VO], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
+				"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAPPING_INSERT_VO", mbDebug);			
+	POP_CTX
+	UpdateApron(0, 0.0f);
+	UpdateApron(1, 0.0f);
+}
 
 void VolumeGVDB::InsertPoints ( int num_pnts, Vector3DF trans, bool bPrefix )
 {

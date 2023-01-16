@@ -213,6 +213,7 @@
 	#define FUNC_MAPPING_UPDATE_REG	122
 	#define FUNC_MAPPING_UPDATE_VREG 123
 	#define FUNC_MAPPING_FILL_0		124
+	#define FUNC_MAPPING_INSERT_VO	125
 
 	#define MAX_FUNC				255
 
@@ -351,7 +352,14 @@
 		CUdeviceptr  	voxelCpyClr;
 		float 			voxel_size;
 	};
-
+	
+	struct ALIGN(16) VirtualObjectInfo {
+		uchar			id;
+		int 			numPnt;
+		int 			numVol;
+		CUdeviceptr 	lenVol;
+		CUdeviceptr		pntList;
+	};
 	
 	class GVDB_API VolumeGVDB : public VolumeBase {
 	public:
@@ -374,6 +382,7 @@
 			// Mapping
 			void setFrameInformation(FrameInfo &frame);
 			void setRaycastInformation(RaycastUpdate &frame);
+			void setVOInformation(VirtualObjectInfo &voInfo);
 						
 			CUcontext getContext() { return mContext; }
 			CUdevice getDevice() { return mDevice; }
@@ -595,6 +604,7 @@
 			void InsertPointsSubcell_FP16(int subcell_size, int num_pnts, float radius, Vector3DF trans, int& pSCPntsLength);	
 			void InsertScanRays(FrameInfo& ray_info, Vector3DF& s, Vector3DF& u, Vector3DF& v);
 			void InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res);	
+			void InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min, Vector3DF &max);	
 
 			void ScalePntPos(int num_pnts, float scale);
 			void ScatterDensity			(int num_pnts, float radius, float amp, Vector3DF trans, bool expand = true, bool avgColor = false );			
@@ -910,6 +920,7 @@
 			// Mapping
 			CUdeviceptr	cuFrameInfo;
 			CUdeviceptr	cuRaycastUpdate;
+			CUdeviceptr	cuVOUpdate;
 
 			// CUDA Device & Context
 			int				mDevSelect;

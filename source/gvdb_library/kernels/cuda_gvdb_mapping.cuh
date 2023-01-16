@@ -388,7 +388,7 @@ extern "C" __global__ void gvdbUpdateMapPC ( int3 res )
 	if ( x >= res.x || y >= res.y ) return;
 
 	float3 point = rayInfo.pntList[ y * res.x +x] * rayInfo.voxel_size;
-	if (point.x <= 0.0f && point.y <= 0.0f && point.z <= 0.0f) return;
+	if (point.x <= 0 && point.y <= 0 && point.z <= 0 ) return;
     
 	int3 vox = make_int3(point);
 	vox = vox - rayInfo.voxelCpyOffset;
@@ -448,6 +448,7 @@ extern "C" __global__ void gvdbUpdateMapVoxelCpy ( VDBInfo* gvdb, int3 atlasRes,
 
 	if ( !getAtlasToWorld ( gvdb, atlasIdx, wpos )) return;
 	wpos -= make_float3(0.5, 0.5, 0.5);
+	if (wpos.x < 0 || wpos.y < 0 || wpos.z < 0 ) return;
 	
 	// is in region
 	if (wpos.x < rayInfo.voxelCpyOffset.x || wpos.x >= rayInfo.voxelCpyOffset.x + rayInfo.voxelCpyDim.x || 
@@ -471,7 +472,7 @@ extern "C" __global__ void gvdbUpdateMapVoxelCpy ( VDBInfo* gvdb, int3 atlasRes,
 		newColor.y += (float) oldClr.y;
 		newColor.z += (float) oldClr.z;
 		newColor /= (update+ 1.0f);
-		uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 255);
+		uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 0);
 		surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
 		return;
 	}
@@ -485,13 +486,17 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	if (x >= rayInfo.voxelCpyDim.x || y >= rayInfo.voxelCpyDim.y || z >= rayInfo.voxelCpyDim.z) return;
 
 	float3 wpos = make_float3(float(x + rayInfo.voxelCpyOffset.x), float(y + rayInfo.voxelCpyOffset.y), float(z + rayInfo.voxelCpyOffset.z));
+	if (wpos.x < 0 || wpos.y < 0 || wpos.z < 0 ) return;
 
 	float3 offs, vmin; uint64 nid;
 	VDBNode* node = getNodeAtPoint ( gvdb, wpos, &offs, &vmin, &nid );				// find vdb node at point
 	if (node == 0x0) return;
-	float3 atlasIdx = offs + wpos - vmin;
+	float3 pos = wpos - vmin;
+	pos = make_float3(int(pos.x), int(pos.y), int(pos.z));
+	if (pos.x < 0 || pos.y < 0 || pos.z < 0 || pos.x >= gvdb->res[0] || pos.y >= gvdb->res[0] || pos.z >= gvdb->res[0]) return;
+
+	uint3 atlasIdx = make_uint3(offs) + make_uint3(pos);
 	if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.y || atlasIdx.z >= atlasRes.z) return;
-	if (atlasIdx.x < 0 || atlasIdx.y < 0 || atlasIdx.z < 0) return;
 
 	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	float update = rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
@@ -508,11 +513,10 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	newColor.y += (float) oldClr.y;
 	newColor.z += (float) oldClr.z;
 	newColor /= (update+ 1.0f);
-	uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 255);
+	uchar4 clr = make_uchar4(newColor.x, newColor.y, newColor.z, 0);
 	surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
 	return;
 }
-
 
 extern "C" __global__ void gvdbFillZero ( int3 res )
 {
@@ -528,6 +532,62 @@ extern "C" __global__ void gvdbFillZero ( int3 res )
 		rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z] = 0.0f;
 		rayInfo.voxelCpyClr[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z] = make_float3(0,0,0);
 	}//TODO: remove
+	return;
+}
+
+struct ALIGN(16) VirtualObjectData {
+	uint8_t 	id;
+	int 		numPnt;
+	int 		numVol;
+	int* 		lenVol;
+	float3*		pntList;
+};
+__device__ VirtualObjectData		voInfo;
+
+extern "C" __global__ void gvdbInsertVirtualObject ( VDBInfo* gvdb, int3 dimensions, int3 offset, int3 atlasRes )
+{
+	int volIdx, faceIdx;
+	int pointPos = 0;
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int z = blockIdx.z * blockDim.z + threadIdx.z;
+	if (x >= dimensions.x || y >= dimensions.y || z >= dimensions.z) return;
+
+	float3 wpos = make_float3(float(x + offset.x), float(y + offset.y), float(z + offset.z));
+	if (wpos.x < 0 || wpos.y < 0 || wpos.z < 0 ) return;
+
+	for (volIdx = 0; volIdx < voInfo.numVol; volIdx++) {
+		bool insert = true;
+		for (faceIdx = 0; faceIdx < voInfo.lenVol[volIdx]; faceIdx++) {
+			float3 position = voInfo.pntList[pointPos + faceIdx * 2];
+			float3 normal = voInfo.pntList[pointPos + faceIdx * 2 + 1];
+			float dist = dot(wpos - position, normal);
+			if (x == 25 && y == 25 && z == 25) {
+			}
+			if (dist > 0) insert = false;
+		}
+		if (insert) {
+			float3 offs, vmin; uint64 nid;
+			VDBNode* node = getNodeAtPoint ( gvdb, wpos, &offs, &vmin, &nid );				// find vdb node at point
+			if (node == 0x0) return;
+			float3 pos = wpos - vmin;
+			pos = make_float3(int(pos.x), int(pos.y), int(pos.z));
+			if (pos.x < 0 || pos.y < 0 || pos.z < 0 || pos.x >= gvdb->res[0] || pos.y >= gvdb->res[0] || pos.z >= gvdb->res[0]) return;
+
+			uint3 atlasIdx = make_uint3(offs) + make_uint3(pos);
+			if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.y || atlasIdx.z >= atlasRes.z) return;
+
+			float v = 100000;
+			surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+
+			uchar4 clr = make_uchar4(0, 0, 255, voInfo.id);
+			surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
+			return;
+		}
+		pointPos += voInfo.lenVol[volIdx] * 2;
+	}
+
+	
 	return;
 }
 
