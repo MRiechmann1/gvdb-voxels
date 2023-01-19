@@ -545,17 +545,17 @@ struct ALIGN(16) VirtualObjectData {
 };
 __device__ VirtualObjectData		voInfo;
 
-extern "C" __global__ void gvdbInsertVirtualObject ( VDBInfo* gvdb, int3 dimensions, int3 offset, int3 atlasRes )
+extern "C" __global__ void gvdbInsertVirtualObject ( VDBInfo* gvdb, int3 atlasRes, uchar chan,float p1, float p2, float p3  )
 {
+	float3 wpos;
 	int volIdx, faceIdx;
 	int pointPos = 0;
-	int x = blockIdx.x * blockDim.x + threadIdx.x;
-	int y = blockIdx.y * blockDim.y + threadIdx.y;
-	int z = blockIdx.z * blockDim.z + threadIdx.z;
-	if (x >= dimensions.x || y >= dimensions.y || z >= dimensions.z) return;
+	GVDB_VOXUNPACKED
 
-	float3 wpos = make_float3(float(x + offset.x), float(y + offset.y), float(z + offset.z));
-	if (wpos.x < 0 || wpos.y < 0 || wpos.z < 0 ) return;
+
+	if ( !getAtlasToWorld ( gvdb, atlasIdx, wpos )) return;
+	wpos += make_float3(0.5, 0.5, 0.5);
+
 
 	for (volIdx = 0; volIdx < voInfo.numVol; volIdx++) {
 		bool insert = true;
@@ -563,20 +563,9 @@ extern "C" __global__ void gvdbInsertVirtualObject ( VDBInfo* gvdb, int3 dimensi
 			float3 position = voInfo.pntList[pointPos + faceIdx * 2];
 			float3 normal = voInfo.pntList[pointPos + faceIdx * 2 + 1];
 			float dist = dot(wpos - position, normal);
-			if (x == 25 && y == 25 && z == 25) {
-			}
 			if (dist > 0) insert = false;
 		}
 		if (insert) {
-			float3 offs, vmin; uint64 nid;
-			VDBNode* node = getNodeAtPoint ( gvdb, wpos, &offs, &vmin, &nid );				// find vdb node at point
-			if (node == 0x0) return;
-			float3 pos = wpos - vmin;
-			pos = make_float3(int(pos.x), int(pos.y), int(pos.z));
-			if (pos.x < 0 || pos.y < 0 || pos.z < 0 || pos.x >= gvdb->res[0] || pos.y >= gvdb->res[0] || pos.z >= gvdb->res[0]) return;
-
-			uint3 atlasIdx = make_uint3(offs) + make_uint3(pos);
-			if (atlasIdx.x >= atlasRes.x || atlasIdx.y >= atlasRes.y || atlasIdx.z >= atlasRes.z) return;
 
 			float v = 100000;
 			surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);

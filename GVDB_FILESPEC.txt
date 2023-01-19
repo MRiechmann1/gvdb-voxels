@@ -62,6 +62,7 @@ Voxel size              12 byte, vec3f  [h] The size of each voxel in world unit
 # of Bricks             4 byte, int     [i] Number of bricks stored for this grid
 Brick dims              12 byte, vec3i  [j] Dimensions of a single brick, not including the apron voxels
 Brick apron             4 byte, int     [k] Brick apron size (in voxels) stored in the file
+Number of channels      4 byte, int         Number of Channels
 Total Atlas Size        8 byte, ulong   [l] Total size of the atlas data in bytes
 Topology Type?          1 byte, uchar   [m] Type of topology. Values: 0=None, 1=Reuse, 2=GVDB, 3=other. 
 Topology Reuse Grid     4 byte, int     [n] Reuse another gvdb grid for topology. No topology section if set.

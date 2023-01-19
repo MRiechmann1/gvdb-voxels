@@ -684,11 +684,11 @@ bool VolumeGVDB::LoadVBX(const std::string fname, int force_maj, int force_min)
 		
 		// Read atlas into GPU slice-by-slice to conserve CPU and GPU mem
 		for (int chan = 0 ; chan < num_chan; chan++ ) {
-			int chan_type, chan_stride;
+			int chan_type, chan_stride, chan_filter;
 			fread ( &chan_type, sizeof(int), 1, fp );
 			fread ( &chan_stride, sizeof(int), 1, fp );
-
-			AddChannel ( chan, chan_type, apron, F_LINEAR, F_BORDER, axiscnt );		// provide axiscnt
+			fread ( &chan_filter, sizeof(int), 1, fp );
+			AddChannel ( chan, chan_type, apron, chan_filter, F_BORDER, axiscnt );	
 
 			mPool->AtlasSetNum ( chan, cnt0[0] );		// assumes atlas contains all bricks (all are resident)
 
@@ -1771,9 +1771,11 @@ void VolumeGVDB::SaveVBX ( const std::string fname )
 			DataPtr slice;
 			const int chan_type = mPool->getAtlas(chan).type ;
 			const int chan_stride = mPool->getSize ( chan_type );
+			const int chan_filter = mPool->getAtlas(chan).filter;
 
 			fwrite ( &chan_type, sizeof(int), 1, fp );
 			fwrite ( &chan_stride, sizeof(int), 1, fp );
+			fwrite ( &chan_filter, sizeof(int), 1, fp );
 			mPool->CreateMemLinear ( slice, 0x0, chan_stride, axisres.x*axisres.y, true );
 
 			for (int z = 0; z < axisres.z; z++ ) {
@@ -2331,6 +2333,52 @@ void VolumeGVDB::SaveVDB ( std::string fname )
 	gprintf("ERROR: Unable to save .vdb file. OpenVDB library not linked.\n");
 	return;
 #endif
+}
+
+void VolumeGVDB::WriteBricks(Node *cur, DataPtr &brick, int channel, int stride, FILE* fp) {
+	if (cur == 0x0) return;
+	int level = cur->mLev;
+
+	int res = getRes(level);
+	for (int i = level; i < mPool->getNumLevels(); i++) {
+		std::cout << "  ";
+	}
+
+	if (level == 0) {
+		fwrite ( &(cur->mPos.x), sizeof(int), 3, fp );
+		AtlasRetrieveBrickXYZ(channel, cur->mValue, brick);
+		fwrite ( brick.cpu, stride, res*res*res, fp );
+	}
+
+	for (size_t i = 0; i < res*res*res; i++) {
+		Node *child = getChild(cur, i);
+		WriteBricks(child, brick, channel, stride, fp);
+	}
+}
+
+void VolumeGVDB::SaveGridMap( std::string fname, float voxel_size ) {
+	FILE* fp = fopen ( fname.c_str(), "wb" );
+	Node *root = getNode(mRoot);
+	const int num_chan = mPool->getNumAtlas();
+	const int brickRes = getRes(0);
+	const int leafcnt = static_cast<int>(mPool->getPoolTotalCnt(0,0));
+	fwrite ( &num_chan, sizeof(int), 1, fp );	// number of channels
+	fwrite ( &brickRes, sizeof(int), 1, fp );	// brick Resolution
+	fwrite ( &voxel_size, sizeof(int), 1, fp );	// size of voxel in meter; externaly defined
+	fwrite ( &leafcnt, sizeof(int), 1, fp );	// number of bricks
+
+	for (int chan = 0; chan < num_chan; chan++) {
+		const int chanType = mPool->getAtlas(chan).type;
+		const int chanStride = mPool->getSize ( chanType );
+		fwrite ( &chanType, sizeof(int), 1, fp );	// type of channel
+		fwrite ( &chanStride, sizeof(int), 1, fp );	// stride of channel
+		
+		DataPtr brick;
+		mPool->CreateMemLinear ( brick, 0x0, chanStride, brickRes*brickRes*brickRes, true );
+		WriteBricks(root, brick, chan, chanStride, fp);
+		mPool->FreeMemLinear(brick);
+	}
+	fclose ( fp );
 }
 
 // Add a search path for assets
@@ -5394,19 +5442,8 @@ void VolumeGVDB::InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min,
 	PERF_POP();
 
 	Vector3DI dimensionsRegion = max - min; // dimensions seem to be 0
-	Vector3DI offset = min;
-	setVOInformation(vo_info);
-	Vector3DI block = Vector3DI(8, 8 ,8);
-	Vector3DI grid = Vector3DI(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
-	Vector3DI atlasRes = mPool->getAtlasRes(0);
-	void* args1[4] = 
-	{  
-		&cuVDBInfo, &dimensionsRegion, &offset, &atlasRes
-	};
-	PUSH_CTX
-		cudaCheck(cuLaunchKernel(cuFunc[FUNC_MAPPING_INSERT_VO], grid.x, grid.y, grid.z, block.x, block.y, block.z, 0, NULL, args1, NULL), 
-				"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAPPING_INSERT_VO", mbDebug);			
-	POP_CTX
+
+	Compute(FUNC_MAPPING_INSERT_VO, 0, 1, dimensionsRegion, false, false);
 	UpdateApron(0, 0.0f);
 	UpdateApron(1, 0.0f);
 }
