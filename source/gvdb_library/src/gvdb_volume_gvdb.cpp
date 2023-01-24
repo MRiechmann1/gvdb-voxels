@@ -2335,24 +2335,22 @@ void VolumeGVDB::SaveVDB ( std::string fname )
 #endif
 }
 
-void VolumeGVDB::WriteBricks(Node *cur, DataPtr &brick, int channel, int stride, FILE* fp) {
+void VolumeGVDB::WriteBricks(Node *cur, DataPtr &brick, int channel, int stride, FILE* fp, int &counter) {
 	if (cur == 0x0) return;
 	int level = cur->mLev;
 
 	int res = getRes(level);
-	for (int i = level; i < mPool->getNumLevels(); i++) {
-		std::cout << "  ";
-	}
 
 	if (level == 0) {
 		fwrite ( &(cur->mPos.x), sizeof(int), 3, fp );
 		AtlasRetrieveBrickXYZ(channel, cur->mValue, brick);
 		fwrite ( brick.cpu, stride, res*res*res, fp );
+		counter++;
 	}
 
 	for (size_t i = 0; i < res*res*res; i++) {
 		Node *child = getChild(cur, i);
-		WriteBricks(child, brick, channel, stride, fp);
+		WriteBricks(child, brick, channel, stride, fp, counter);
 	}
 }
 
@@ -2365,7 +2363,9 @@ void VolumeGVDB::SaveGridMap( std::string fname, float voxel_size ) {
 	fwrite ( &num_chan, sizeof(int), 1, fp );	// number of channels
 	fwrite ( &brickRes, sizeof(int), 1, fp );	// brick Resolution
 	fwrite ( &voxel_size, sizeof(int), 1, fp );	// size of voxel in meter; externaly defined
+	const long leafcnt_pos = ftell ( fp );					// position of grid table in file
 	fwrite ( &leafcnt, sizeof(int), 1, fp );	// number of bricks
+	int counter = 0;
 
 	for (int chan = 0; chan < num_chan; chan++) {
 		const int chanType = mPool->getAtlas(chan).type;
@@ -2375,9 +2375,13 @@ void VolumeGVDB::SaveGridMap( std::string fname, float voxel_size ) {
 		
 		DataPtr brick;
 		mPool->CreateMemLinear ( brick, 0x0, chanStride, brickRes*brickRes*brickRes, true );
-		WriteBricks(root, brick, chan, chanStride, fp);
+		WriteBricks(root, brick, chan, chanStride, fp, counter);
 		mPool->FreeMemLinear(brick);
 	}
+	std::cout << counter << std::endl;
+	counter /= num_chan;
+	fseek(fp, leafcnt_pos, SEEK_SET);
+	fwrite(&counter, sizeof(int), 1, fp); // grid offsets
 	fclose ( fp );
 }
 
@@ -5442,6 +5446,7 @@ void VolumeGVDB::InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min,
 	PERF_POP();
 
 	Vector3DI dimensionsRegion = max - min; // dimensions seem to be 0
+	setVOInformation(vo_info);
 
 	Compute(FUNC_MAPPING_INSERT_VO, 0, 1, dimensionsRegion, false, false);
 	UpdateApron(0, 0.0f);

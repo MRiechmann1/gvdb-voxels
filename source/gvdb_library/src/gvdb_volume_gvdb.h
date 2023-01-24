@@ -434,7 +434,7 @@
 			bool FindFile ( std::string fname, char* path );		
 			void ConvertBitmaskToNonBitmask(int levs);
 			void SaveGridMap( std::string fname,float voxel_size );
-			void WriteBricks(Node *cur, DataPtr &brick, int channel, int stride, FILE* fp) ;
+			void WriteBricks(Node *cur, DataPtr &brick, int channel, int stride, FILE* fp, int &counter) ;
 
 			// Topology Functions
 			void Configure ( int r4, int r3, int r2, int r1, int r0 );		// Initialize VDB configuration
