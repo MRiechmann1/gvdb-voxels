@@ -214,6 +214,7 @@
 	#define FUNC_MAPPING_UPDATE_VREG 123
 	#define FUNC_MAPPING_FILL_0		124
 	#define FUNC_MAPPING_INSERT_VO	125
+	#define FUNC_MAPPING_INSERT_VOI	126
 
 	#define MAX_FUNC				255
 
@@ -606,7 +607,7 @@
 			void InsertPointsSubcell_FP16(int subcell_size, int num_pnts, float radius, Vector3DF trans, int& pSCPntsLength);	
 			void InsertScanRays(FrameInfo& ray_info, Vector3DF& s, Vector3DF& u, Vector3DF& v);
 			void InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res);	
-			void InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min, Vector3DF &max);	
+			void InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min, Vector3DF &max, int inv=0);	
 
 			void ScalePntPos(int num_pnts, float scale);
 			void ScatterDensity			(int num_pnts, float radius, float amp, Vector3DF trans, bool expand = true, bool avgColor = false );			

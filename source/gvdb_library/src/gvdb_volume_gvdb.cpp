@@ -335,6 +335,7 @@ void VolumeGVDB::SetCudaDevice ( int devid, CUcontext ctx )
 	LoadFunction ( FUNC_MAPPING_UPDATE_VREG,"gvdbUpdateMapVoxRegion",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_FILL_0,		"gvdbFillZero",					MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 	LoadFunction ( FUNC_MAPPING_INSERT_VO, 	"gvdbInsertVirtualObject",		MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
+	LoadFunction ( FUNC_MAPPING_INSERT_VOI, "gvdbInsertVirtualObjectInverse",MODL_PRIMARY, CUDA_GVDB_MODULE_PTX );
 
 	SetModule ( cuModule[MODL_PRIMARY] );	
 
@@ -5409,7 +5410,7 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 
 	PERF_PUSH("FUNC_MAPPING_UPDATE_RAY");
 	cudaCheck( cuLaunchKernel( cuFunc[FUNC_MAPPING_UPDATE_RAY], grid.x, grid.y, 1, block.x, block.y, 1, 0, NULL, args, NULL),
-		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAP_RAYCAST_RAY_GVDB", mbDebug );
+		"VolumeGVDB", "MapExtraGVDB", "cuLaunch", "FUNC_MAPPING_UPDATE_RAY", mbDebug );
 	
 	block = Vector3DI(8, 8 ,8);
 	grid = Vector3DI(int(dimensionsRegion.x / block.x)+1, int(dimensionsRegion.y / block.y)+1, int(dimensionsRegion.z / block.z)+1);
@@ -5437,7 +5438,7 @@ void VolumeGVDB::InsertScanRays(RaycastUpdate &ray_info, Vector3DI &scan_res) {
 	//gvdb.AllocData ( m_pnts, m_maxpnts, sizeof(float), true );
 }
 
-void VolumeGVDB::InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min, Vector3DF &max) {
+void VolumeGVDB::InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min, Vector3DF &max, int inv) {
 	PERF_PUSH("Dynamic Topology");	
 	ActivateSpace ( min, max );
 
@@ -5448,7 +5449,11 @@ void VolumeGVDB::InsertVirtualObject(VirtualObjectInfo &vo_info, Vector3DF &min,
 	Vector3DI dimensionsRegion = max - min; // dimensions seem to be 0
 	setVOInformation(vo_info);
 
-	Compute(FUNC_MAPPING_INSERT_VO, 0, 1, dimensionsRegion, false, false);
+	if (inv == 0)
+		Compute(FUNC_MAPPING_INSERT_VO, 0, 1, dimensionsRegion, false, false);
+	else 
+		Compute(FUNC_MAPPING_INSERT_VOI, 0, 1, dimensionsRegion, false, false);
+
 	UpdateApron(0, 0.0f);
 	UpdateApron(1, 0.0f);
 }

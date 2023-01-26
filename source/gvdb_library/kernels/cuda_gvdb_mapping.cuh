@@ -501,8 +501,7 @@ extern "C" __global__ void gvdbUpdateMapRegion ( VDBInfo* gvdb, int numPnts, int
 	float v = surf3Dread<float>(gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	float update = rayInfo.voxelsCpy[x * rayInfo.voxelCpyDim.y * rayInfo.voxelCpyDim.z + y * rayInfo.voxelCpyDim.z + z];
 	v += update;
-	v = min(max(v, -20.0), 200000.0);
-	//printf("%ud, %ud, %ud", atlasIdx.x, atlasIdx.y, atlasIdx.z);
+	v = min(max(v, -200.0), 200000.0);
 	surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
 	
 
@@ -577,6 +576,39 @@ extern "C" __global__ void gvdbInsertVirtualObject ( VDBInfo* gvdb, int3 atlasRe
 		pointPos += voInfo.lenVol[volIdx] * 2;
 	}
 
+	
+	return;
+}
+
+extern "C" __global__ void gvdbInsertVirtualObjectInverse ( VDBInfo* gvdb, int3 atlasRes, uchar chan,float p1, float p2, float p3  )
+{
+	float3 wpos;
+	int volIdx, faceIdx;
+	int pointPos = 0;
+	GVDB_VOXUNPACKED
+
+
+	if ( !getAtlasToWorld ( gvdb, atlasIdx, wpos )) return;
+	wpos += make_float3(0.5, 0.5, 0.5);
+
+	for (volIdx = 0; volIdx < voInfo.numVol; volIdx++) {
+		bool inMass = true;
+		for (faceIdx = 0; faceIdx < voInfo.lenVol[volIdx]; faceIdx++) {
+			float3 position = voInfo.pntList[pointPos + faceIdx * 2];
+			float3 normal = voInfo.pntList[pointPos + faceIdx * 2 + 1];
+			float dist = dot(wpos - position, normal);
+			if (dist > 0) inMass = false; // if dist > 0 insert = true and skip out of loop
+		}
+		if (inMass) return;
+
+		pointPos += voInfo.lenVol[volIdx] * 2;
+	}
+
+	float v = 100000;
+	surf3Dwrite( v, gvdb->volOut[0], atlasIdx.x * sizeof(float), atlasIdx.y, atlasIdx.z);
+
+	uchar4 clr = make_uchar4(0, 0, 255, voInfo.id);
+	surf3Dwrite( clr, gvdb->volOut[1], atlasIdx.x * sizeof(uchar4), atlasIdx.y, atlasIdx.z);
 	
 	return;
 }
